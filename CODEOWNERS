@@ -1,0 +1,28 @@
+# DT-RAM Component Ownership Mapping
+
+# Global project maintenance
+* @project-maintainers
+
+# Node.js / TypeScript Gateway & Experiment Services (Member 1)
+/services/api-gateway/ @member-1
+/services/experiment-service/ @member-1
+
+# Go Infrastructure, Telemetry, and Kubernetes Orchestration (Member 2)
+/services/infrastructure-controller/ @member-2
+/services/telemetry-agent/ @member-2
+/services/twin-manager/ @member-2
+/infrastructure/ @member-2
+
+# Python Forecasting & Data Engineering (Member 3)
+/services/prediction-service/ @member-3
+/datasets/ @member-3
+
+# Python Digital Twin, Simulator & RL Engine (Member 4)
+/services/rl-service/ @member-4
+/services/simulation-service/ @member-4
+/services/safety-service/ @member-2 @member-4
+
+# Workloads & Experiments (Collaborative)
+/workloads/ @member-1 @member-2
+/experiments/ @member-3 @member-4
+/docs/ @member-1 @member-2 @member-3 @member-4

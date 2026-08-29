@@ -2151,6 +2151,8 @@ dt-ram/
 ├── CONTRIBUTING.md
 ├── CODEOWNERS
 ├── SECURITY.md
+├── .gitignore
+├── .env.example
 │
 ├── docs/
 │   ├── architecture.md
@@ -2235,6 +2237,34 @@ dt-ram/
     ├── ISSUE_TEMPLATE/
     └── pull_request_template.md
 ```
+
+## 51.1 Version Control & Environment Hygiene
+
+To maintain repository cleanliness, avoid merge conflicts, and protect credentials and large binaries:
+
+1. **Git Ignore & Confidentiality Guardrails**:
+   - A comprehensive root `.gitignore` is maintained to prevent committing:
+     - Heavy dependencies: `node_modules/`, Python virtual environments (`venv/`, `.venv/`), Go binaries (`bin/`).
+     - Large machine learning weights, checkpoints (`*.pt`, `*.pth`, `*.onnx`, `*.ckpt`), and raw dataset traces (`datasets/raw/*`).
+     - Confidential configurations and secrets: `.env`, `.env.*`, certificates (`*.pem`, `*.key`), and `kubeconfig` files.
+   - Use `.env.example` as a template for team environment configuration.
+
+2. **Python Environment & Package Management Guidelines**:
+   - Every contributor working on Python services (`prediction-service`, `rl-service`, `simulation-service`, `safety-service`) must isolate dependencies using a Python virtual environment:
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate  # On Windows: .\venv\Scripts\Activate.ps1
+     ```
+   - All Python package installations must be executed using `pip3`:
+     ```bash
+     pip3 install --upgrade pip
+     pip3 install -r requirements.txt
+     ```
+   - Never install packages globally or commit virtual environment folders.
+
+3. **Node.js & Go Dependency Guidelines**:
+   - For Node.js services, install locally via `npm install` inside each respective service folder.
+   - For Go services, manage modules and dependencies via `go mod tidy`.
 
 ---
 
