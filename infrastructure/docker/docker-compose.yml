@@ -1,0 +1,118 @@
+name: dt-ram
+
+services:
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/varz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: timescale/timescaledb:2.15.3-pg16
+    environment:
+      POSTGRES_DB: dt_ram
+      POSTGRES_USER: dt_user
+      POSTGRES_PASSWORD: dt_password_change_me
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ../infrastructure/monitoring/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dt_user -d dt_ram"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  telemetry-agent:
+    build:
+      context: ../../services/telemetry-agent
+    environment:
+      TELEMETRY_NODE_ID: edge-a1
+      TELEMETRY_LOCATION: edge-zone-a
+      TELEMETRY_AGENT_PORT: 8082
+      NATS_URL: nats://nats:4222
+      TELEMETRY_PUBLISH_ENABLED: "true"
+      TELEMETRY_SUBJECT: dt.telemetry.node_metric
+    ports:
+      - "8082:8082"
+    depends_on:
+      nats:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+
+  twin-manager:
+    build:
+      context: ../../services/twin-manager
+    environment:
+      TWIN_MANAGER_PORT: 8080
+      NATS_URL: nats://nats:4222
+      TWIN_SUBJECT: dt.telemetry.node_metric
+      REDIS_ADDR: redis:6379
+    ports:
+      - "8080:8080"
+    depends_on:
+      nats:
+        condition: service_started
+      redis:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+
+  infrastructure-controller:
+    build:
+      context: ../../services/infrastructure-controller
+    environment:
+      INFRASTRUCTURE_CONTROLLER_PORT: 8081
+      NATS_URL: nats://nats:4222
+      DECISION_SUBJECT: dt.decisions.resource
+      K8S_NAMESPACE: dt-ram
+      CONTROLLER_DRY_RUN: "true"
+      SAFETY_MAX_MIGRATIONS_PER_MIN: "3"
+    ports:
+      - "8081:8081"
+    depends_on:
+      nats:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+
+  prometheus:
+    image: prom/prometheus:v2.53.2
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+volumes:
+  redis-data:
+  pg-data:

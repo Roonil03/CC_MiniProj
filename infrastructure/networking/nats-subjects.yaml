@@ -1,0 +1,23 @@
+# NATS JetStream subjects (Design.md Sections 52-54).
+# Sync (request/reply over HTTP) is used for API queries; async NATS for
+# telemetry / state / decisions / audit.
+subjects:
+  - name: dt.telemetry.node_metric
+    event: NODE_METRIC_UPDATED
+    publisher: telemetry-agent
+    subscriber: twin-manager
+  - name: dt.twin.state_updated
+    event: TWIN_STATE_UPDATED
+    publisher: twin-manager
+    subscriber: prediction-service, simulation-service
+  - name: dt.decisions.resource
+    event: RESOURCE_DECISION
+    publisher: rl-service
+    subscriber: infrastructure-controller
+  - name: dt.decisions.audit
+    event: RESOURCE_DECISION_RESULT
+    publisher: infrastructure-controller
+    subscriber: experiment-service
+stream: DT_RAM
+retention: limits
+ack: explicit

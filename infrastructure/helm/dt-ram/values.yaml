@@ -1,0 +1,12 @@
+namespace: dt-ram
+controller:
+  dryRun: true
+  image: dt-ram/infrastructure-controller:latest
+twin:
+  image: dt-ram/twin-manager:latest
+telemetry:
+  image: dt-ram/telemetry-agent:latest
+nats:
+  url: nats://nats.dt-ram.svc.cluster.local:4222
+redis:
+  addr: redis.dt-ram.svc.cluster.local:6379
