@@ -1,0 +1,156 @@
+================================================================================
+MEMBER-2 LOG — Go Microservices Infrastructure, Telemetry & K8s Orchestration
+Branch: member2 | Date: 2026-10-05 | Owner scope per CODEOWNERS
+================================================================================
+
+1. SCOPE (Member-2 owned, nothing else touched)
+--------------------------------------------------------------------------------
+- services/telemetry-agent/        (Go/Gin telemetry collector + publisher)
+- services/twin-manager/           (Go/Gin twin sync, state store, fidelity)
+- services/infrastructure-controller/ (Go/Gin gated K8s actuation)
+- infrastructure/                  (docker compose, K8s manifests, k3s/k3d,
+                                    monitoring, networking, helm skeleton)
+- services/*/configs/config.yaml   (externalized tunables, Design Sec 58)
+- member2.txt (this file), infrastructure/README.md
+- NOT touched: api-gateway, experiment-service (M1), prediction-service (M3),
+  rl-service, simulation-service, safety-service (M4/shared). Integration with
+  those services is via stable schemas/events only.
+
+2. DESIGN COMPLIANCE (schemas stuck to, nothing invented)
+--------------------------------------------------------------------------------
+- Node/workload JSON: Design Sec 16 field names kept verbatim
+  (node_id, cpu_total/used, memory_total_mb/used_mb, network_in/out_mbps,
+  latency_to_cloud_ms, health, timestamp; workload service_id, replicas,
+  cpu/memory request+usage, request_rate, p95_latency_ms, slo_ms).
+- NATS events: Sec 53 NODE_METRIC_UPDATED and Sec 54 RESOURCE_DECISION shapes.
+- Sync cadence Sec 17: CPU/mem/net 1s (not 100ms); pod/health slower by design.
+- Fidelity formula + autonomy bands Sec 18 implemented exactly
+  (>0.95 autonomous, 0.90-0.95 restricted, 0.80-0.90 simulation-only,
+  <0.80 disabled; stale always disables).
+- Safety gates Sec 33-36 + fallback Sec 64: fail-closed on stale DT, low
+  prediction confidence (<0.80), SLO prob (>0.10), unhealthy nodes, no
+  destination capacity, storm (>3 migrations/min), cooldown (30s/node).
+- Migration duration estimate Sec 31: T = S_state/B_effective + T_overhead.
+- Boundary Sec 66 preserved: ONLY the Go controller touches the K8s API
+  (least-privilege Role); Python/RL proposes candidate actions via NATS/HTTP.
+- Ports match .env.example: twin 8080, controller 8081, telemetry 8082.
+- Framework choice: Gin (approved); local K8s target: k3d; twin store
+  Phase-1: in-memory hot store + Redis write-through path, Postgres/Timescale
+  DDL provided for the durable sink (Redis-then-Postgres decision honored).
+
+3. WHAT WAS BUILT (files)
+--------------------------------------------------------------------------------
+telemetry-agent (module dt-ram/telemetry-agent, go 1.23, Gin):
+  cmd/agent/main.go                  — HTTP :8082 + 1s background sampler
+  internal/model/model.go            — Sec 16/53 schemas
+  internal/config/config.go          — env-overridable defaults
+  internal/collector/collector.go    — gopsutil CPU/mem/net, clamped [0,1]
+  internal/publisher/publisher.go    — LogPublisher default; NATS JetStream opt-in
+  internal/server/server.go          — /healthz /readyz /metrics /collect
+  internal/collector/collector_test.go, internal/server/server_test.go
+  Dockerfile (multi-stage golang:1.23-alpine -> distroless nonroot)
+  configs/config.yaml
+
+twin-manager (module dt-ram/twin-manager, go 1.23, Gin):
+  cmd/twin/main.go                   — HTTP :8080 + NATS subscribe (best-effort)
+  internal/model/model.go            — NodeState/WorkloadState/TelemetryIngest/FidelityReport
+  internal/config/config.go          — thresholds per Sec 58
+  internal/store/store.go            — concurrency-safe MemoryStore (hermetic
+                                       default; Redis/Postgres via compose sink)
+  internal/sync/sync.go              — normalize->timestamp->validate->update,
+                                       staleness flag (>5s), range validation
+  internal/fidelity/fidelity.go      — Sec 18 score + autonomy mapping
+  internal/server/server.go          — /healthz /twin/state /twin/state/:id
+                                       POST /twin/update /twin/fidelity
+  internal/sync/sync_test.go, internal/fidelity/fidelity_test.go
+  Dockerfile (same multi-stage pattern), configs/config.yaml
+
+infrastructure-controller (module dt-ram/infrastructure-controller, Gin):
+  cmd/controller/main.go             — HTTP :8081 + NATS RESOURCE_DECISION consumer
+  internal/model/model.go            — Action (Sec 24), Predicted + DecisionRequest
+                                       (Sec 54), SafetyVerdict, ActionRecord audit
+  internal/config/config.go          — dry-run default true (fail-closed)
+  internal/validator/validator.go    — schema gate (known types, required fields,
+                                       source!=destination, replicas>=0)
+  internal/safety/safety.go          — explicit gates + storm/cooldown + duration est.
+  internal/executor/executor.go      — LoggingExecutor default; K8sExecutor
+                                       (client-go scale + placement annotation)
+  internal/audit/audit.go            — insertion-ordered audit log
+  internal/server/server.go          — /healthz /actions* POST validate/execute
+  internal/safety/safety_test.go, internal/validator/validator_test.go
+  Dockerfile, configs/config.yaml
+
+infrastructure/:
+  docker/docker-compose.yml          — nats, redis, postgres/timescale, prometheus
+                                       + the 3 Go services (limits, healthchecks)
+  kubernetes/00-namespace-rbac.yaml  — dt-ram ns + controller-only Role/Binding
+  kubernetes/10-go-services.yaml     — Deployments/Services for 3 Go services
+  k3s/k3d.yaml                       — 1 server + 2 agents, Sec 38 zone labels
+  monitoring/prometheus.yml          — scrape of the 3 Go services
+  monitoring/initdb/01-schema.sql    — Timescale hypertables (Sec 55 tables)
+  networking/nats-subjects.yaml      — subject/event/publisher/subscriber table
+  helm/dt-ram/Chart.yaml, values.yaml — chart skeleton mirroring compose
+  README.md                          — run instructions for compose/k3d/RBAC
+
+4. VERIFICATION (actually run, honest results)
+--------------------------------------------------------------------------------
+All on branch member2, Go 1.26.0 toolchain, module go 1.23:
+- telemetry-agent:      go build OK, go vet OK, go test ./... PASS
+  (collector 2 tests, server 2 tests incl. NODE_METRIC_UPDATED schema check)
+- twin-manager:         go build OK, go vet OK, go test ./... PASS
+  (sync 2 tests incl. stale-flag + range reject; fidelity 2 tests incl.
+  perfect-match=1.0 and all 5 autonomy bands)
+- infrastructure-controller: go build OK, go vet OK,
+  go test ./internal/... PASS (safety 6 tests: approve, stale-twin reject,
+  unhealthy-dest reject, SLO reject, storm/cooldown, duration est; validator
+  3 tests: unknown type, same src/dst, noop accept)
+- compose/YAML: `docker compose config` OK; all K8s/k3d/networking/helm YAML
+  parse OK via yaml.safe_load_all.
+- Runtime smoke (binaries, NATS absent -> graceful HTTP-only degradation):
+  * :18082/healthz, :18080/healthz, :18081/healthz -> all {"status":"ok"}
+  * GET /collect -> valid NODE_METRIC_UPDATED event with live host sample
+  * POST /twin/update -> stored node; GET /twin/state shows it;
+    GET /twin/fidelity reports (fresh node fidelity 0 -> "disabled",
+    correct fail-closed behavior until scored)
+  * POST /actions/validate (fidelity 0.97) -> {"approved":true,...}
+  * POST /actions/validate (fidelity 0.50) -> {"approved":false,
+    "dt fidelity 0.500 below minimum 0.800..."}
+  * POST /actions/execute dry-run -> approved+dry-run record, no mutation;
+    GET /actions/d-smoke-1 returns the audit entry.
+- NOT run (blocked, not claimed): `docker build` — daemon socket
+  /var/run/docker.sock is root:docker and this user lacks membership and
+  passwordless sudo, so image builds could not execute here. Dockerfiles
+  follow the same verified multi-stage pattern and compose config validates;
+  image build must be re-run in CI/dev with Docker access. No real-cluster
+  mutation was attempted (controller DRY_RUN=true, LoggingExecutor).
+
+5. CONTAINERIZATION
+--------------------------------------------------------------------------------
+- Each Go service: multi-stage Dockerfile (golang:1.23-alpine build,
+  distroless/static-debian12:nonroot runtime, EXPOSE, ENTRYPOINT), resource
+  limits in compose + K8s manifests, Prometheus scraping wired.
+- One-command local plane: docker compose up --build (needs Docker access).
+- K8s path: k3d topology -> kubectl apply RBAC -> apply services; Helm values
+  mirror compose for later promotion.
+
+6. COMMITS ON member2 (incremental, conventional)
+--------------------------------------------------------------------------------
+- d572de9 feat(telemetry): add Gin agent with gopsutil collector and NATS publishing
+- 4471fe8 feat(twin): add sync engine, fidelity scoring and twin state API
+- aa55081 feat(controller): add gated actuation pipeline with safety gate and K8s executor
+- e5206e9 feat(infra): add compose, K8s manifests, k3d topology and monitoring
+- (this log) docs(member2): add member2.txt change log
+  (pushed: branch member2 -> origin)
+
+7. KNOWN LIMITATIONS / NEXT STEPS
+--------------------------------------------------------------------------------
+- Twin fidelity starts at 0/disabled for freshly ingested nodes until a
+  physical-vs-twin Score() comparison runs; wire periodic re-scoring + persist
+  reports to twin_fidelity hypertable next.
+- Controller K8sExecutor covers SCALE + placement annotation; cordon/drain and
+  rollback paths are future work behind the same gate.
+- safety-service (Python) stays M4-owned; Go gate already fail-closes when it
+  is unreachable (no migration) but the HTTP call-through is not yet wired.
+- Re-run `docker build` + `compose up` + `k3d` apply where Docker/K8s exist.
+- No secrets committed (.env/kubeconfig/keys untouched per .gitignore).
+================================================================================
