@@ -16,4 +16,4 @@ COPY app ./app
 ENV PYTHONPATH="/srv/safety-service:/srv/simulation-service:${PYTHONPATH}"
 
 EXPOSE 5003
-CMD ["/opt/venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5003"]
+CMD ["/opt/venv/bin/uvicorn", "safety_app.main:app", "--host", "0.0.0.0", "--port", "5003"]
