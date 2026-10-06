@@ -6,6 +6,7 @@ package safety
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -16,11 +17,11 @@ import (
 
 // Gate enforces migration limits and cooldowns with an audit trail.
 type Gate struct {
-	cfg       config.Config
-	mu        sync.Mutex
+	cfg        config.Config
+	mu         sync.Mutex
 	migrations []time.Time
-	nodeLast  map[string]time.Time
-	now       func() time.Time
+	nodeLast   map[string]time.Time
+	now        func() time.Time
 }
 
 // New returns a Gate with the given safety configuration.
@@ -43,15 +44,15 @@ func (g *Gate) Evaluate(req model.DecisionRequest) model.SafetyVerdict {
 	}
 
 	// DT fidelity gate (Design.md Section 18 + AGENTS.md fallback).
-	if req.DTFidelity < g.cfg.MinFidelity {
+	if !probability(req.DTFidelity) || req.DTFidelity < g.cfg.MinFidelity || req.DTFidelity <= 0.95 {
 		reject("dt fidelity %.3f below minimum %.3f: disable RL actuation", req.DTFidelity, g.cfg.MinFidelity)
 	}
 	// Prediction confidence gate (Section 34).
-	if req.Predicted.PredictionConfidence < g.cfg.MinPredictionConfidence && req.Predicted.PredictionConfidence > 0 {
+	if !probability(req.Predicted.PredictionConfidence) || req.Predicted.PredictionConfidence < g.cfg.MinPredictionConfidence {
 		reject("prediction confidence %.3f below minimum %.3f", req.Predicted.PredictionConfidence, g.cfg.MinPredictionConfidence)
 	}
 	// SLO gate (Section 26/33).
-	if req.Predicted.SLOViolationProb > g.cfg.MaxSLOProb {
+	if !probability(req.Predicted.SLOViolationProb) || req.Predicted.SLOViolationProb > g.cfg.MaxSLOProb {
 		reject("predicted SLO violation probability %.3f exceeds max %.3f", req.Predicted.SLOViolationProb, g.cfg.MaxSLOProb)
 	}
 	// Health gates.
@@ -62,7 +63,7 @@ func (g *Gate) Evaluate(req model.DecisionRequest) model.SafetyVerdict {
 		if !req.DestinationOK {
 			reject("destination node unhealthy or unavailable")
 		}
-		if req.DestinationFree <= 0 {
+		if math.IsNaN(req.DestinationFree) || math.IsInf(req.DestinationFree, 0) || req.DestinationFree <= 0 {
 			reject("destination lacks free capacity")
 		}
 	}
@@ -95,6 +96,8 @@ func (g *Gate) Evaluate(req model.DecisionRequest) model.SafetyVerdict {
 	return model.SafetyVerdict{Approved: true, Reasons: []string{"all safety checks passed"}}
 }
 
+func probability(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) && v >= 0 && v <= 1 }
+
 // RecordMigration logs a successful migration for storm/cooldown accounting.
 func (g *Gate) RecordMigration(source string) {
 	g.mu.Lock()
@@ -110,5 +113,5 @@ func MigrationDurationEstimate(stateMB, bandwidthMbps, overheadSec float64) floa
 	if bandwidthMbps <= 0 {
 		return -1
 	}
-	return (stateMB*8/bandwidthMbps) + overheadSec
+	return (stateMB * 8 / bandwidthMbps) + overheadSec
 }

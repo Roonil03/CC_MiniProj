@@ -14,11 +14,12 @@ import (
 
 	"dt-ram/infrastructure-controller/internal/audit"
 	"dt-ram/infrastructure-controller/internal/config"
+	"dt-ram/infrastructure-controller/internal/decision"
+	"dt-ram/infrastructure-controller/internal/discovery"
 	"dt-ram/infrastructure-controller/internal/executor"
 	"dt-ram/infrastructure-controller/internal/model"
 	"dt-ram/infrastructure-controller/internal/safety"
 	"dt-ram/infrastructure-controller/internal/server"
-	"dt-ram/infrastructure-controller/internal/validator"
 
 	"github.com/nats-io/nats.go"
 )
@@ -39,31 +40,37 @@ func main() {
 		log.Println("CONTROLLER_DRY_RUN=true: cluster mutations disabled (safe default)")
 	}
 
-	deps := server.Deps{Config: cfg, Gate: gate, Executor: ex, Audit: logStore}
+	processor := &decision.Processor{Config: cfg, Gate: gate, Audit: logStore}
+	deps := server.Deps{Config: cfg, Gate: gate, Executor: ex, Audit: logStore, Processor: processor}
+	if reader, err := discovery.New(cfg.Kubeconfig); err != nil {
+		log.Printf("Kubernetes discovery unavailable: %v", err)
+	} else {
+		deps.Discovery = reader
+	}
 
 	// Best-effort NATS consumer for RESOURCE_DECISION events (Design Sec 54).
 	if nc, err := nats.Connect(cfg.NATSURL); err != nil {
 		log.Printf("NATS unavailable (%v); controller running in HTTP-only mode", err)
 	} else {
 		defer nc.Close()
-		_, err = nc.Subscribe(cfg.DecisionSubject, func(m *nats.Msg) {
+		js, err := nc.JetStream()
+		if err != nil {
+			log.Fatalf("JetStream: %v", err)
+		}
+		if _, err = js.AddStream(&nats.StreamConfig{Name: "DT_DECISIONS", Subjects: []string{cfg.DecisionSubject}, Storage: nats.FileStorage, MaxAge: time.Hour, MaxMsgs: 10000}); err != nil {
+			log.Fatalf("decision stream: %v", err)
+		}
+		_, err = js.Subscribe(cfg.DecisionSubject, func(m *nats.Msg) {
 			var req model.DecisionRequest
 			if err := json.Unmarshal(m.Data, &req); err != nil {
 				log.Printf("bad decision event: %v", err)
+				_ = m.Term()
 				return
 			}
-			if err := validator.ValidateAction(req.Action); err != nil {
-				log.Printf("decision %s schema reject: %v", req.DecisionID, err)
-				return
-			}
-			v := gate.Evaluate(req)
-			if !v.Approved {
-				log.Printf("decision %s safety reject: %v", req.DecisionID, v.Reasons)
-				logStore.Append(model.ActionRecord{DecisionID: req.DecisionID, Action: req.Action, Verdict: v, At: time.Now().UTC(), DryRun: true})
-				return
-			}
-			log.Printf("decision %s approved: %v", req.DecisionID, v.Reasons)
-		})
+			rec, status := processor.Process(context.Background(), req)
+			log.Printf("decision %s status=%d result=%+v", req.DecisionID, status, rec)
+			_ = m.Ack()
+		}, nats.Durable("infrastructure-controller"), nats.ManualAck(), nats.AckExplicit(), nats.BindStream("DT_DECISIONS"))
 		if err != nil {
 			log.Printf("NATS subscribe failed: %v", err)
 		}

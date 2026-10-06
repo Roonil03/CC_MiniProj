@@ -1,6 +1,7 @@
 package safety_test
 
 import (
+	"math"
 	"testing"
 
 	"dt-ram/infrastructure-controller/internal/config"
@@ -17,6 +18,22 @@ func testCfg() config.Config {
 	cfg.MaxSLOProb = 0.10
 	cfg.MaxMigrationsPerMinute = 3
 	return cfg
+}
+
+func TestRejectMissingOrInvalidConfidence(t *testing.T) {
+	for _, value := range []float64{0, -1, 0.79, 1.1, math.NaN(), math.Inf(1)} {
+		req := approvedReq()
+		req.Predicted.PredictionConfidence = value
+		require.False(t, safety.New(testCfg()).Evaluate(req).Approved)
+	}
+}
+
+func TestRejectNonAutonomousFidelity(t *testing.T) {
+	for _, value := range []float64{.8, .9, .95, 1.1, math.NaN()} {
+		req := approvedReq()
+		req.DTFidelity = value
+		require.False(t, safety.New(testCfg()).Evaluate(req).Approved)
+	}
 }
 
 func approvedReq() model.DecisionRequest {

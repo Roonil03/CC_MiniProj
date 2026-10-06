@@ -5,6 +5,7 @@ package validator
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"dt-ram/infrastructure-controller/internal/model"
@@ -25,16 +26,21 @@ func ValidateAction(a model.Action) error {
 	}
 	switch strings.ToUpper(a.Type) {
 	case "MIGRATE", "PLACE":
+		if strings.ToUpper(a.Type) == "MIGRATE" && strings.TrimSpace(a.Source) == "" {
+			return fmt.Errorf("source is required for MIGRATE")
+		}
 		if strings.TrimSpace(a.Destination) == "" {
 			return fmt.Errorf("destination is required for %s", a.Type)
 		}
-		if strings.EqualFold(a.Source, a.Destination) {
+		if a.Source == a.Destination {
 			return fmt.Errorf("source and destination must differ")
 		}
 	case "SCALE":
-		if a.Replicas == nil || *a.Replicas < 0 {
+		if a.Replicas == nil || *a.Replicas < 0 || int64(*a.Replicas) > math.MaxInt32 {
 			return fmt.Errorf("replicas must be >= 0 for SCALE")
 		}
+	case "RESOURCE_ADJUST":
+		return fmt.Errorf("RESOURCE_ADJUST is not implemented; use SCALE or NOOP")
 	}
 	return nil
 }

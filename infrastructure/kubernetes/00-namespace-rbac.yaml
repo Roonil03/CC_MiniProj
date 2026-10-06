@@ -11,7 +11,7 @@ metadata:
   name: dt-ram-controller
   namespace: dt-ram
 ---
-# Least privilege: controller may read workloads cluster-wide but may only
+# Least privilege: controller may read nodes cluster-wide but may only
 # write deployments/scales in dt-ram namespaces. Python/ML services get NO
 # RoleBinding here (Design.md Section 65-66).
 apiVersion: rbac.authorization.k8s.io/v1
@@ -24,7 +24,7 @@ rules:
     resources: ["deployments", "deployments/scale"]
     verbs: ["get", "list", "update", "patch"]
   - apiGroups: [""]
-    resources: ["pods", "nodes"]
+    resources: ["pods"]
     verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -39,4 +39,26 @@ subjects:
 roleRef:
   kind: Role
   name: dt-ram-controller
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dt-ram-node-reader
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dt-ram-node-reader
+subjects:
+  - kind: ServiceAccount
+    name: dt-ram-controller
+    namespace: dt-ram
+roleRef:
+  kind: ClusterRole
+  name: dt-ram-node-reader
   apiGroup: rbac.authorization.k8s.io

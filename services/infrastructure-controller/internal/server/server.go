@@ -6,6 +6,9 @@ package server
 
 import (
 	"context"
+	"dt-ram/infrastructure-controller/internal/decision"
+	"dt-ram/infrastructure-controller/internal/discovery"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -21,16 +24,59 @@ import (
 
 // Deps wires config, safety gate, executor and audit log.
 type Deps struct {
-	Config   config.Config
-	Gate     *safety.Gate
-	Executor executor.Executor
-	Audit    *audit.Log
+	Config    config.Config
+	Gate      *safety.Gate
+	Executor  executor.Executor
+	Audit     *audit.Log
+	Processor *decision.Processor
+	Discovery discovery.Reader
 }
 
 // Router builds the Gin engine.
 func Router(d Deps) *gin.Engine {
+	if d.Processor == nil {
+		d.Processor = &decision.Processor{Config: d.Config, Gate: d.Gate, Audit: d.Audit}
+	}
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.GET("/metrics", func(c *gin.Context) {
+		records := d.Audit.List()
+		rejected := 0
+		for _, record := range records {
+			if !record.Verdict.Approved {
+				rejected++
+			}
+		}
+		c.Data(http.StatusOK, "text/plain; version=0.0.4", []byte(fmt.Sprintf("# TYPE controller_audit_records gauge\ncontroller_audit_records %d\n# TYPE controller_rejected_records gauge\ncontroller_rejected_records %d\n", len(records), rejected)))
+	})
+	r.GET("/infrastructure/nodes", func(c *gin.Context) {
+		if d.Discovery == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Kubernetes discovery unavailable"})
+			return
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		nodes, err := d.Discovery.Nodes(ctx)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, nodes)
+	})
+	r.GET("/infrastructure/pods", func(c *gin.Context) {
+		if d.Discovery == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Kubernetes discovery unavailable"})
+			return
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		pods, err := d.Discovery.Pods(ctx, d.Config.Namespace)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, pods)
+	})
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "infrastructure-controller", "executor": d.Executor.Name()})
 	})
@@ -64,41 +110,8 @@ func Router(d Deps) *gin.Engine {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if err := validator.ValidateAction(req.Action); err != nil {
-			rec := model.ActionRecord{DecisionID: req.DecisionID, Action: req.Action, Verdict: model.SafetyVerdict{Reasons: []string{err.Error()}}, At: time.Now().UTC()}
-			d.Audit.Append(rec)
-			c.JSON(http.StatusUnprocessableEntity, rec)
-			return
-		}
-		v := d.Gate.Evaluate(req)
-		rec := model.ActionRecord{DecisionID: req.DecisionID, Action: req.Action, Verdict: v, At: time.Now().UTC(), DryRun: req.DryRun || d.Config.DryRun}
-		if !v.Approved {
-			d.Audit.Append(rec)
-			c.JSON(http.StatusUnprocessableEntity, rec)
-			return
-		}
-		if rec.DryRun {
-			rec.Message = "validated+approved (dry-run, no cluster mutation)"
-			d.Audit.Append(rec)
-			c.JSON(http.StatusOK, rec)
-			return
-		}
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
-		defer cancel()
-		msg, err := d.Executor.Execute(ctx, d.Config.Namespace, req.Action)
-		if err != nil {
-			rec.Message = err.Error()
-			d.Audit.Append(rec)
-			c.JSON(http.StatusBadGateway, rec)
-			return
-		}
-		rec.Executed = true
-		rec.Message = msg
-		if upper(req.Action.Type) == "MIGRATE" {
-			d.Gate.RecordMigration(req.Action.Source)
-		}
-		d.Audit.Append(rec)
-		c.JSON(http.StatusOK, rec)
+		rec, status := d.Processor.Process(c.Request.Context(), req)
+		c.JSON(status, rec)
 	})
 	return r
 }
