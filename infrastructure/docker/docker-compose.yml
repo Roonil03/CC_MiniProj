@@ -3,7 +3,9 @@ name: dt-ram
 services:
   nats:
     image: nats:2.10-alpine
-    command: ["-js", "-m", "8222"]
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    volumes:
+      - nats-data:/data
     ports:
       - "4222:4222"
       - "8222:8222"
@@ -36,7 +38,7 @@ services:
       - "5432:5432"
     volumes:
       - pg-data:/var/lib/postgresql/data
-      - ../infrastructure/monitoring/initdb:/docker-entrypoint-initdb.d:ro
+      - ../monitoring/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dt_user -d dt_ram"]
       interval: 10s
@@ -57,7 +59,7 @@ services:
       - "8082:8082"
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -76,9 +78,9 @@ services:
       - "8080:8080"
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -99,7 +101,7 @@ services:
       - "8081:8081"
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -114,5 +116,6 @@ services:
       - "9090:9090"
 
 volumes:
+  nats-data:
   redis-data:
   pg-data:

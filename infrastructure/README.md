@@ -42,13 +42,33 @@ live actuation remain dependent on the integrated control loop.
 
 ```bash
 k3d cluster create --config infrastructure/k3s/k3d.yaml
+docker build -t dt-ram/telemetry-agent:latest services/telemetry-agent
+docker build -t dt-ram/twin-manager:latest services/twin-manager
+docker build -t dt-ram/infrastructure-controller:latest services/infrastructure-controller
+k3d image import -c dt-ram dt-ram/telemetry-agent:latest dt-ram/twin-manager:latest dt-ram/infrastructure-controller:latest
 kubectl apply -f infrastructure/kubernetes/00-namespace-rbac.yaml
+kubectl apply -f infrastructure/kubernetes/05-nats.yaml
+kubectl apply -f infrastructure/kubernetes/06-redis.yaml
+kubectl rollout status -n dt-ram statefulset/nats
+kubectl rollout status -n dt-ram statefulset/redis
 kubectl apply -f infrastructure/kubernetes/10-go-services.yaml
 ```
 
 RBAC: only the `dt-ram-controller` ServiceAccount may write
 deployments/scales in `dt-ram`. ML/RL services receive no write bindings
 (Design.md Sections 65-66).
+
+Telemetry runs once per node as a DaemonSet, uses the physical node name and
+host networking for network counters, and explicitly enables event publication.
+Twin/telemetry do not mount ServiceAccount tokens. NATS and Redis use PVCs;
+the cluster must provide a default StorageClass (k3d/k3s normally does).
+Images are imported locally; IfNotPresent avoids pulling unpublished latest tags.
+The k3d labels use the documented `options.k3s.nodeLabels` and `nodeFilters`
+structure: [k3d config reference](https://k3d.io/v5.6.0/usage/configfile/).
+
+Compose waits for NATS/Redis health and persists JetStream under nats-data.
+The Helm directory remains a values/chart scaffold, without install templates.
+For cluster-free manifest regression checks, run `go test ./...` in infrastructure.
 
 ## Subjects
 

@@ -1,20 +1,29 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
   name: telemetry-agent
   namespace: dt-ram
   labels: {app: telemetry-agent}
 spec:
-  replicas: 1
   selector: {matchLabels: {app: telemetry-agent}}
   template:
     metadata: {labels: {app: telemetry-agent}}
     spec:
+      automountServiceAccountToken: false
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: agent
           image: dt-ram/telemetry-agent:latest
+          imagePullPolicy: IfNotPresent
           ports: [{containerPort: 8082}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8082}}
+          livenessProbe: {httpGet: {path: /healthz, port: 8082}, initialDelaySeconds: 10}
           env:
+            - name: TELEMETRY_NODE_ID
+              valueFrom:
+                fieldRef: {fieldPath: spec.nodeName}
+            - {name: TELEMETRY_PUBLISH_ENABLED, value: "true"}
             - {name: TELEMETRY_AGENT_PORT, value: "8082"}
             - {name: NATS_URL, value: "nats://nats.dt-ram.svc.cluster.local:4222"}
           resources: {limits: {cpu: "500m", memory: "256Mi"}}
@@ -38,14 +47,18 @@ spec:
   template:
     metadata: {labels: {app: twin-manager}}
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: twin
           image: dt-ram/twin-manager:latest
+          imagePullPolicy: IfNotPresent
           ports: [{containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+          livenessProbe: {httpGet: {path: /healthz, port: 8080}, initialDelaySeconds: 10}
           env:
             - {name: TWIN_MANAGER_PORT, value: "8080"}
-            - {name: NATS_URL, value: "nats://nats.dt-ram.svc.cluster.local:4222"}
             - {name: REDIS_ADDR, value: "redis.dt-ram.svc.cluster.local:6379"}
+            - {name: NATS_URL, value: "nats://nats.dt-ram.svc.cluster.local:4222"}
           resources: {limits: {cpu: "500m", memory: "256Mi"}}
 ---
 apiVersion: v1
@@ -71,7 +84,10 @@ spec:
       containers:
         - name: controller
           image: dt-ram/infrastructure-controller:latest
+          imagePullPolicy: IfNotPresent
           ports: [{containerPort: 8081}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8081}}
+          livenessProbe: {httpGet: {path: /healthz, port: 8081}, initialDelaySeconds: 10}
           env:
             - {name: INFRASTRUCTURE_CONTROLLER_PORT, value: "8081"}
             - {name: NATS_URL, value: "nats://nats.dt-ram.svc.cluster.local:4222"}

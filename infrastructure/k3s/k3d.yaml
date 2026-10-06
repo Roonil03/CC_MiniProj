@@ -7,13 +7,17 @@ servers: 1
 agents: 2
 options:
   k3s:
-    extraArgs:
-      - arg: --label=topology.edge/node-type=cloud --node=server:0
-      - arg: --label=topology.edge/project-zone=cloud --node=server:0
-      - arg: --label=topology.edge/node-type=edge --node=agent:0
-      - arg: --label=topology.edge/project-zone=edge-a --node=agent:0
-      - arg: --label=topology.edge/node-type=edge --node=agent:1
-      - arg: --label=topology.edge/project-zone=edge-b --node=agent:1
+    nodeLabels:
+      - label: topology.edge/node-type=cloud
+        nodeFilters: [server:0]
+      - label: topology.edge/project-zone=cloud
+        nodeFilters: [server:0]
+      - label: topology.edge/node-type=edge
+        nodeFilters: [agent:0, agent:1]
+      - label: topology.edge/project-zone=edge-a
+        nodeFilters: [agent:0]
+      - label: topology.edge/project-zone=edge-b
+        nodeFilters: [agent:1]
 ports:
   - port: 8080:80
     nodeFilters: [loadbalancer]
