@@ -30,6 +30,11 @@ Discovery works in dry-run mode. Missing cluster credentials return 503;
 upstream Kubernetes errors return 502. Node status, allocatable resources,
 pod placement and resource requests are available in these native objects.
 
+The low-level SCALE executor is tested with fake Kubernetes. MIGRATE and PLACE
+return errors: the previous Deployment annotation did not actually move pods.
+Rollout verification, reversible placement, capacity checks and authenticated
+live actuation remain dependent on the integrated control loop.
+
 ## Kubernetes (k3d)
 
 ```bash

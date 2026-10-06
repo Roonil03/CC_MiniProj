@@ -32,7 +32,7 @@ func (LoggingExecutor) Name() string { return "logging (dry-run safe)" }
 func (LoggingExecutor) Execute(_ context.Context, ns string, a model.Action) (string, error) {
 	msg := fmt.Sprintf("dry-run %s service=%s ns=%s src=%s dst=%s", a.Type, a.Service, ns, a.Source, a.Destination)
 	log.Println(msg)
-	return msg, nil
+	return msg, fmt.Errorf("logging executor cannot perform cluster mutations")
 }
 
 // K8sExecutor performs real scaling/placement via the K8s API.
@@ -78,22 +78,7 @@ func (k *K8sExecutor) Execute(ctx context.Context, ns string, a model.Action) (s
 		}
 		return fmt.Sprintf("scaled %s to %d replicas in ns %s", a.Service, *a.Replicas, ns), nil
 	case "MIGRATE", "PLACE":
-		// Controlled placement: annotate the Deployment with the approved
-		// destination so GitOps/policy tooling and the scheduler path stay
-		// visible. Actual pod movement follows the cluster scheduler.
-		dep, err := k.client.AppsV1().Deployments(ns).Get(ctx, a.Service, metav1.GetOptions{})
-		if err != nil {
-			return "", fmt.Errorf("get deployment %s: %w", a.Service, err)
-		}
-		if dep.Annotations == nil {
-			dep.Annotations = map[string]string{}
-		}
-		dep.Annotations["dt-ram/approved-destination"] = a.Destination
-		dep.Annotations["dt-ram/approved-source"] = a.Source
-		if _, err := k.client.AppsV1().Deployments(ns).Update(ctx, dep, metav1.UpdateOptions{}); err != nil {
-			return "", fmt.Errorf("annotate placement %s: %w", a.Service, err)
-		}
-		return fmt.Sprintf("approved placement %s: %s -> %s (annotated, scheduler follows)", a.Service, a.Source, a.Destination), nil
+		return "", fmt.Errorf("placement execution is unavailable until rollout verification and rollback are implemented")
 	case "NOOP":
 		return "noop: no cluster operation", nil
 	default:
