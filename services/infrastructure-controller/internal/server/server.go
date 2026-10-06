@@ -1,7 +1,7 @@
 // Package server exposes the infrastructure-controller HTTP API (Gin).
 //
-// Pipeline per decision: schema validation -> safety gate -> executor.
-// Rejected actions return 422 with reasons and are audit-logged.
+// Decisions are validated and audited in dry-run mode. Live execution returns
+// 503 until the authoritative twin/counterfactual/safety contract is implemented.
 package server
 
 import (
@@ -114,14 +114,4 @@ func Router(d Deps) *gin.Engine {
 		c.JSON(status, rec)
 	})
 	return r
-}
-
-func upper(s string) string {
-	b := []byte(s)
-	for i, ch := range b {
-		if ch >= 'a' && ch <= 'z' {
-			b[i] = ch - ('a' - 'A')
-		}
-	}
-	return string(b)
 }

@@ -25,7 +25,7 @@ func New(s store.Store, staleAfter time.Duration) *SyncEngine {
 }
 
 // ApplyTelemetry validates, timestamps and stores one telemetry sample.
-// Unknown nodes are created with defaults; health defaults to healthy.
+// Missing capacity stays unknown and missing health is explicitly unknown.
 func (e *SyncEngine) ApplyTelemetry(t model.TelemetryIngest) (model.NodeState, error) {
 	if t.NodeID == "" {
 		return model.NodeState{}, fmt.Errorf("node_id is required")

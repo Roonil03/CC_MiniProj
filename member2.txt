@@ -1,3 +1,6 @@
+CURRENT STATUS: See the 2026-10-06 follow-up at the end of this file.
+The original implementation log below is historical and contains superseded
+claims about Redis, JetStream, placement and fail-closed live safety.
 ================================================================================
 MEMBER-2 LOG — Go Microservices Infrastructure, Telemetry & K8s Orchestration
 Branch: member2 | Date: 2026-10-05 | Owner scope per CODEOWNERS
@@ -153,4 +156,81 @@ All on branch member2, Go 1.26.0 toolchain, module go 1.23:
   is unreachable (no migration) but the HTTP call-through is not yet wired.
 - Re-run `docker build` + `compose up` + `k3d` apply where Docker/K8s exist.
 - No secrets committed (.env/kubeconfig/keys untouched per .gitignore).
+================================================================================
+
+================================================================================
+MEMBER-2 FOLLOW-UP — 2026-10-06 — branch member2
+================================================================================
+Scope: inspected Design.md sections 70-71 against actual code, ownership and
+other services. M1/M3/M4 services contain manifests/dependency scaffolds only;
+no authoritative simulation, prediction, safety or gateway contracts exist.
+
+Completed and committed small tasks:
+- afabab3 fix(twin): ordering, finite/range validation, future-time rejection,
+  read-time freshness; missing capacity/health remains unknown.
+- 6335b21 fix(telemetry): serialized sampling, measured CPU/memory capacities,
+  network counter reset protection, sensor/publication errors surfaced.
+- d153cf5 fix(controller): shared HTTP/NATS decision processor, audit trail,
+  duplicate-ID rejection, missing confidence rejection, autonomy fidelity band,
+  live-actuation block, read-only node/namespaced-pod discovery and RBAC.
+- 143129b fix(controller): fake-client SCALE tests; remove annotation-only
+  placement success; unsupported migration/place requests cannot mutate pods.
+- 2233fd7 feat(telemetry): acknowledged bounded JetStream streams, restart replay,
+  explicit event acknowledgements, all configured Prometheus endpoints.
+- 533b6d6 feat(twin): optional Redis write-through persistence with atomic ordered
+  updates, restored node/workload state, fail-closed Redis outages.
+- 5febf3b fix(infra): correct Compose Timescale bind path and startup dependencies;
+  persistent NATS/Redis Kubernetes services; per-node telemetry DaemonSet,
+  physical node identity, enabled publishing, probes, local image imports;
+  k3d nodeLabels/nodeFilters; cluster-free manifest/RBAC regression tests.
+- 85d21a5 feat(config): load existing service YAML tunables, preserve environment
+  overrides, reject invalid settings, copy configs into runtime images.
+
+Verification actually run on this Windows workspace:
+- All three Go modules: go test ./... PASS, go build PASS, go vet ./... PASS.
+- Infrastructure module: go test ./... PASS (YAML, bind sources, node RBAC).
+- Real NATS 2.10.22: optional publisher integration test PASS (publish ack,
+  retained replay, explicit consumer ack). Test server installed only under
+  ignored local-dev; no server binary or cache is committed.
+- Redis protocol test server: node/workload restoration, timestamp ordering,
+  duplicate rejection and outage-without-hot-state-change tests PASS.
+- Runtime smoke with hidden local binaries + real JetStream PASS: measured
+  host telemetry -> twin, all /metrics endpoints, HTTP/NATS audit without
+  actuation, live request returns 503, restart restores retained telemetry,
+  stopped telemetry becomes stale after configured threshold.
+- docker compose config --quiet PASS (Docker emitted a local config access
+  warning). Docker daemon unavailable: no image build or compose startup run.
+- kubectl client dry-run could not complete API discovery: no local Kubernetes
+  server. No cluster mutation attempted; fake client tests are not cluster proof.
+- go test -race ./... could not run: CGO is disabled and no C compiler available.
+  No claim of race-detector success is made.
+
+Integration handoff / limits:
+- Current work is ready for the other members' scaffold stage, not a completed
+  physical deployment or end-to-end autonomous research system.
+- Phase 1 foundation and Phase 2 host telemetry/discovery exist and are tested.
+  Pod inventory is exposed via native Kubernetes PodList; pod/application usage,
+  latency/SLO telemetry and workload-to-twin reconciliation remain integration
+  work. Node readiness/capacity can be read from native NodeList.
+- Phase 3 SCALE primitive is tested; RESOURCE_ADJUST is rejected explicitly.
+  Per-container request/limit adjustment needs an agreed action encoding.
+- Phase 4 migration, rollout observation and rollback need physical topology,
+  workload state/storage policy and a validated cluster. Annotation-only placement
+  was not migration and is no longer represented as success.
+- Phase 5 live actuation is explicitly unavailable. Integrate authoritative twin
+  freshness/fidelity, prediction confidence, counterfactual result, safety verdict,
+  CPU/memory/network capacity, authentication, durable audit/idempotency and
+  migration reservations/cooldowns before enabling cluster mutations.
+- Fidelity is not fabricated from matching an ingested sample to itself; nodes
+  remain disabled until an independent physical-vs-simulation comparison exists.
+- REDIS_ADDR enables single-writer write-through storage. Reads are a local hot
+  cache; replicas/multiple writers would need cache reconciliation. Audit IDs and
+  records are process-local. JetStream retention is bounded (24h telemetry,
+  1h decisions), and HTTP-only startup needs restart when NATS returns.
+- Postgres/Timescale DDL is wired but no historical event sink is implemented.
+  TWIN_STATE_UPDATED and RESOURCE_DECISION_RESULT are marked planned reference
+  subjects, not falsely advertised as implemented publications.
+- Helm remains an optional chart/values scaffold. Kubernetes manifests are the
+  documented deployment path; image and real-cluster checks remain outstanding.
+- No secrets, kubeconfig, datasets, model artifacts, or unrelated services changed.
 ================================================================================

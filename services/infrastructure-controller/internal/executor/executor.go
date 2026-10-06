@@ -1,8 +1,7 @@
 // Package executor performs approved Kubernetes operations.
 // LoggingExecutor is the non-destructive default (audit only).
-// K8sExecutor uses client-go with least-privilege RBAC; it is selected
-// automatically when a kubeconfig/cluster config is available, otherwise
-// the controller stays in dry-run / logging mode and never mutates.
+// K8sExecutor contains low-level scaling primitives tested with fake Kubernetes.
+// The public decision processor blocks live calls until safety integration exists.
 package executor
 
 import (
@@ -35,7 +34,7 @@ func (LoggingExecutor) Execute(_ context.Context, ns string, a model.Action) (st
 	return msg, fmt.Errorf("logging executor cannot perform cluster mutations")
 }
 
-// K8sExecutor performs real scaling/placement via the K8s API.
+// K8sExecutor supports scaling; placement remains explicitly unsupported.
 type K8sExecutor struct {
 	client kubernetes.Interface
 }
