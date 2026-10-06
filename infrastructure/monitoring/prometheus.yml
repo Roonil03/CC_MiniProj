@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 5s
+scrape_configs:
+  - job_name: telemetry-agent
+    static_configs:
+      - targets: ["telemetry-agent:8082"]
+  - job_name: twin-manager
+    static_configs:
+      - targets: ["twin-manager:8080"]
+  - job_name: infrastructure-controller
+    static_configs:
+      - targets: ["infrastructure-controller:8081"]

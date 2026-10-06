@@ -1,0 +1,23 @@
+# k3d topology for local edge-cloud emulation (Design.md Sections 37-38).
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: dt-ram
+servers: 1
+agents: 2
+options:
+  k3s:
+    nodeLabels:
+      - label: topology.edge/node-type=cloud
+        nodeFilters: [server:0]
+      - label: topology.edge/project-zone=cloud
+        nodeFilters: [server:0]
+      - label: topology.edge/node-type=edge
+        nodeFilters: [agent:0, agent:1]
+      - label: topology.edge/project-zone=edge-a
+        nodeFilters: [agent:0]
+      - label: topology.edge/project-zone=edge-b
+        nodeFilters: [agent:1]
+ports:
+  - port: 8080:80
+    nodeFilters: [loadbalancer]

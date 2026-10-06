@@ -1,0 +1,7 @@
+system:
+  decision_interval_seconds: 5
+digital_twin:
+  sync_interval_seconds: 1
+  fidelity_threshold: 0.90
+  autonomous_threshold: 0.95
+  stale_after_seconds: 5
