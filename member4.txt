@@ -1,0 +1,113 @@
+================================================================================
+MEMBER-4 LOG — Python Digital Twin, Simulator & RL Engine (+ Notebook)
+Branch: member4 (offshoot of member2) | Date: 2026-10-05
+Owner scope per CODEOWNERS: rl-service, simulation-service, safety-service
+(shared with Member-2), experiments (shared with Member-3)
+================================================================================
+
+1. SCOPE (Member-4 owned, nothing else touched)
+--------------------------------------------------------------------------------
+- services/simulation-service/app/  (twin.py, simulator.py, safety.py,
+                                      schemas.py, main.py + __init__.py)
+- services/rl-service/rl_app/        (env.py, ppo.py, policies.py)
+- services/rl-service/notebooks/member4_dt_sim_rl.ipynb (THE notebook)
+- services/rl-service/requirements.txt (added jupyterlab/ipykernel/matplotlib)
+- services/rl-service/Dockerfile, services/simulation-service/Dockerfile,
+  services/safety-service/Dockerfile (all rewritten: venv + server)
+- services/safety-service/safety_app/ (FastAPI gate; renamed from app/ to
+  avoid an `app` package collision with simulation-service)
+- services/*/tests/                  (26 hermetic unit tests)
+- infrastructure/docker/docker-compose.member4.yml (overlay, member2 stack
+  untouched)
+- member4.txt (this file)
+- NOT touched: member2 Go services, infrastructure/* (except the new
+  overlay file), api-gateway, experiment-service (M1), prediction-service,
+  datasets (M3). Python proposes decisions only; Go owns K8s actuation.
+
+2. DESIGN COMPLIANCE
+--------------------------------------------------------------------------------
+- Twin schemas Sec 16 verbatim; fidelity formula + autonomy bands Sec 18
+  implemented identically to the Go twin-manager (incl. stale => disabled).
+- Counterfactual candidates Sec 29 (no-op/migrate/scale/place/resource-adjust);
+  migration costed (C_network+C_cpu+C_downtime+C_state) and timed
+  (T=S/B+T_overhead, Sec 31) — migration is never free.
+- MDP Sec 22-23 (state incl. predicted horizon; discrete actions), reward
+  Sec 25 (SLO weight 10.0 dominant), PPO hyperparams Sec 58 (gamma 0.99,
+  lr 3e-4). Single-agent PPO baseline only; no MARL, no LLM in the loop.
+- Safety gates Sec 33-36 + fallback Sec 64, fail-closed; boundary Sec 66
+  (no `kubernetes` import in any Python file — verified by inspection).
+- Ports per .env.example: RL 5001, simulation 5002, safety 5003, notebook 8888.
+- Registry metadata Sec 56-57 (model_id, version, dataset, hyperparams,
+  metrics, git SHA, artifact hash) in rl_app/policies.py.
+
+3. WHAT WAS BUILT
+--------------------------------------------------------------------------------
+- twin.py: NodeState/WorkloadState dataclasses, TwinState sync store
+  (timestamp/stale validation), fidelity_score + autonomy_level, score_all.
+- simulator.py: SimResult, migration_duration/cost, queueing-style latency,
+  logistic SLO probability, simulate_action + evaluate_candidates.
+- safety.py: GateConfig + SafetyGate.evaluate/record_migration (capacity,
+  SLO, health, fidelity, confidence, storm, cooldown).
+- schemas.py: node_state/workload_state/resource_decision (§53/§54) builders.
+- simulation-service main.py: FastAPI /healthz + /simulate (twin from
+  request nodes, candidates evaluated, propose-only).
+- rl_app/env.py: Gymnasium EdgeResourceEnv (seeded, deterministic).
+- rl_app/ppo.py: SB3 PPO make_model (lazy import) + deterministic rollout().
+- rl_app/policies.py: policy_record + git_sha.
+- safety_app/main.py: FastAPI /healthz + /validate reusing simulation gate.
+- NOTEBOOK services/rl-service/notebooks/member4_dt_sim_rl.ipynb (15 cells:
+  7 markdown + 8 code, outputs cleared): setup/seed -> twin/staleness/
+  fidelity demo -> counterfactual table -> MDP describe + seeded random
+  rollout -> PPO learn(2048)+eval (small; full training stays on experiment
+  branches) -> safety gate table -> §54 RESOURCE_DECISION emit (or correct
+  fail-closed "emit nothing") -> reproducibility footer (SHA/seed/config).
+- Dockerfiles: python:3.11-slim, `python -m venv /opt/venv` first on PATH,
+  pip install requirements, ipykernel registration (rl), CMD jupyter lab
+  (rl-notebook :8888) / uvicorn (simulation :5002, safety :5003).
+- Compose overlay with resource limits; notebook + simulation bind-mounted
+  for live editing; simulation mounted read-only into rl/safety images.
+
+4. VERIFICATION (actually run — notebook itself NEVER executed, as ordered)
+--------------------------------------------------------------------------------
+- Notebook static check: valid nbformat-4 JSON, 15 cells / 8 code cells,
+  every code cell outputs=[] and execution_count=null. No kernel ever
+  started on it; no .ipynb_checkpoints committed.
+- py_compile: all 9 new .py files OK (isolated /tmp/m4venv).
+- unittest: 26/26 PASS —
+  simulation-service 17 (twin sync/stale/range/fidelity/autonomy; sim
+  baseline/cost/infeasible/duration/candidates; gate approve/noop/stale/
+  SLO/storm),
+  rl-service 6 (env determinism/step/invalid/describe; policy schema/sha),
+  safety-service 3 (healthz/approve/reject). PPO model construction (torch/
+  SB3) intentionally not exercised here; env/policy layers cover the MDP.
+- Compose overlay: YAML parses, services = rl-notebook, simulation-service,
+  safety-service.
+- No __pycache__/*.pyc committed; no secrets; no K8s mutation (no cluster
+  client exists in Python).
+
+5. COMMITS ON member4 (incremental, conventional)
+--------------------------------------------------------------------------------
+- 109102d feat(twin): add Python twin state, fidelity and counterfactual
+  simulator libs
+- a2a3574 feat(rl): add Gymnasium MDP env, PPO baseline and safety-service
+  gate
+- 29954ed feat(notebook): add member4 DT+simulator+PPO notebook with rl_app
+  package
+- b8047b1 feat(docker): venv+Jupyter images for notebook and Python DT/RL
+  services
+- 124695f test(member4): add hermetic unit tests for twin, sim, PPO env
+  and safety gate
+- (this log) docs(member4): add member4.txt change log
+  (pushed: branch member4 -> origin, offshoot of member2)
+
+6. KNOWN LIMITATIONS / NEXT STEPS
+--------------------------------------------------------------------------------
+- Notebook is generated code only — first execution should happen in the
+  venv container (rl-notebook, :8888) with torch/SB3 installed.
+- Full PPO training + experiment provenance (Sec 57) belongs on
+  experiment/* branches with dataset/version/seed records.
+- HTTP call-through from Go controller to safety-service /validate is
+  stubbed server-side here; wiring is Member-2+4 joint work.
+- `docker build`/`compose up` must run where Docker access exists (same
+  environment limitation as member2).
+================================================================================
