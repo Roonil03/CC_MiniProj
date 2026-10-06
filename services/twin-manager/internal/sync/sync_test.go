@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"dt-ram/twin-manager/internal/model"
-	twinsync "dt-ram/twin-manager/internal/sync"
 	"dt-ram/twin-manager/internal/store"
+	twinsync "dt-ram/twin-manager/internal/sync"
 
 	"github.com/stretchr/testify/require"
 )

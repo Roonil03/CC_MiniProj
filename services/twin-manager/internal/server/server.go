@@ -6,8 +6,8 @@ import (
 
 	"dt-ram/twin-manager/internal/fidelity"
 	"dt-ram/twin-manager/internal/model"
-	twinsync "dt-ram/twin-manager/internal/sync"
 	"dt-ram/twin-manager/internal/store"
+	twinsync "dt-ram/twin-manager/internal/sync"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,7 +26,7 @@ func Router(d Deps) *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "twin-manager"})
 	})
 	r.GET("/twin/state", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"nodes": d.Store.ListNodes(), "workloads": d.Store.ListWorkloads()})
+		c.JSON(http.StatusOK, gin.H{"nodes": d.Engine.Nodes(), "workloads": d.Store.ListWorkloads()})
 	})
 	r.GET("/twin/state/:node_id", func(c *gin.Context) {
 		n, ok := d.Store.GetNode(c.Param("node_id"))
@@ -34,7 +34,7 @@ func Router(d Deps) *gin.Engine {
 			c.JSON(http.StatusNotFound, gin.H{"error": "node not found"})
 			return
 		}
-		c.JSON(http.StatusOK, n)
+		c.JSON(http.StatusOK, d.Engine.Refresh(n))
 	})
 	r.POST("/twin/update", func(c *gin.Context) {
 		var in model.TelemetryIngest
@@ -50,7 +50,7 @@ func Router(d Deps) *gin.Engine {
 		c.JSON(http.StatusOK, n)
 	})
 	r.GET("/twin/fidelity", func(c *gin.Context) {
-		nodes := d.Store.ListNodes()
+		nodes := d.Engine.Nodes()
 		reports := make([]model.FidelityReport, 0, len(nodes))
 		for _, n := range nodes {
 			reports = append(reports, fidelity.Report(n))

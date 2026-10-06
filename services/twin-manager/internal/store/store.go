@@ -1,9 +1,6 @@
 // Package store keeps synchronized twin state.
 // MemoryStore is the hermetic default used in tests and local dev.
-// RedisStore wraps MemoryStore with a write-through Redis cache when
-// REDIS_ADDR is reachable (Phase-1 "Redis then Postgres" decision);
-// Postgres persistence is handled by the durable event log / TimescaleDB
-// sink configured under infrastructure/ (Design.md Section 55).
+// State is process-local; Redis and Postgres persistence are not yet implemented.
 package store
 
 import (
@@ -43,8 +40,11 @@ func (s *MemoryStore) UpsertNode(n model.NodeState) error {
 		n.Timestamp = time.Now().UTC()
 	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if prev, ok := s.nodes[n.NodeID]; ok && !n.Timestamp.After(prev.Timestamp) {
+		return fmt.Errorf("node update must be newer than stored state")
+	}
 	s.nodes[n.NodeID] = n
-	s.mu.Unlock()
 	return nil
 }
 
@@ -73,8 +73,12 @@ func (s *MemoryStore) UpsertWorkload(w model.WorkloadState) error {
 		w.Timestamp = time.Now().UTC()
 	}
 	s.mu.Lock()
-	s.workloads[w.ServiceID+"/"+w.NodeID] = w
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	key := w.ServiceID + "/" + w.NodeID
+	if prev, ok := s.workloads[key]; ok && !w.Timestamp.After(prev.Timestamp) {
+		return fmt.Errorf("workload update must be newer than stored state")
+	}
+	s.workloads[key] = w
 	return nil
 }
 
