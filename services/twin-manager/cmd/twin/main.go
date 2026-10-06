@@ -31,7 +31,15 @@ func main() {
 		log.Printf("NATS unavailable (%v); twin-manager running in HTTP-only mode", err)
 	} else {
 		defer nc.Close()
-		_, err = nc.Subscribe(cfg.SubscribeSubject, func(m *nats.Msg) {
+		js, err := nc.JetStream()
+		if err != nil {
+			log.Fatalf("JetStream: %v", err)
+		}
+		if _, err = js.AddStream(&nats.StreamConfig{Name: "DT_TELEMETRY", Subjects: []string{cfg.SubscribeSubject}, Storage: nats.FileStorage, MaxAge: 24 * time.Hour, MaxMsgs: 100000}); err != nil {
+			log.Fatalf("telemetry stream: %v", err)
+		}
+		// Ephemeral consumer replays retained state on restart because the store is in memory.
+		_, err = js.Subscribe(cfg.SubscribeSubject, func(m *nats.Msg) {
 			var ev struct {
 				NodeID    string    `json:"node_id"`
 				Timestamp time.Time `json:"timestamp"`
@@ -46,6 +54,11 @@ func main() {
 			}
 			if err := json.Unmarshal(m.Data, &ev); err != nil {
 				log.Printf("bad telemetry event: %v", err)
+				_ = m.Term()
+				return
+			}
+			if ev.NodeID == "" || ev.Timestamp.IsZero() {
+				_ = m.Term()
 				return
 			}
 			if _, err := engine.ApplyTelemetry(model.TelemetryIngest{
@@ -54,8 +67,11 @@ func main() {
 				NetworkInMbps: ev.Metrics.NetIn, NetworkOutMbps: ev.Metrics.NetOut, Timestamp: ev.Timestamp,
 			}); err != nil {
 				log.Printf("sync reject: %v", err)
+				_ = m.Term()
+				return
 			}
-		})
+			_ = m.Ack()
+		}, nats.ManualAck(), nats.AckExplicit(), nats.DeliverAll(), nats.BindStream("DT_TELEMETRY"))
 		if err != nil {
 			log.Printf("NATS subscribe failed: %v", err)
 		} else {

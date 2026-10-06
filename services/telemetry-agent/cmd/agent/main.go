@@ -26,7 +26,7 @@ func main() {
 	if cfg.PublishEnabled {
 		np, err := publisher.NewNATS(cfg.NATSURL, cfg.PublishSubject)
 		if err != nil {
-			log.Printf("NATS unavailable (%v); falling back to log publisher", err)
+			log.Fatalf("telemetry publishing enabled but JetStream unavailable: %v", err)
 		} else {
 			pub = np
 			defer np.Close()
@@ -57,6 +57,7 @@ func main() {
 				continue
 			}
 			ev := model.NewNodeMetricEvent(cfg.NodeID, m, time.Now().UTC())
+			server.Observe(m)
 			if err := pub.Publish(ev); err != nil {
 				log.Printf("publish error: %v", err)
 			}

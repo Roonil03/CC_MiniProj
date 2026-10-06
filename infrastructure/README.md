@@ -51,3 +51,22 @@ deployments/scales in `dt-ram`. ML/RL services receive no write bindings
 
 See `infrastructure/networking/nats-subjects.yaml` for the NATS subject
 table. Timescale bootstrap: `infrastructure/monitoring/initdb/01-schema.sql`.
+
+Telemetry uses acknowledged JetStream publication. DT_TELEMETRY retains up to
+100,000 messages for 24 hours; twin-manager uses an ephemeral acknowledged
+consumer to rebuild its in-memory state from retained telemetry after restart.
+This is bounded replay, not a durable database. Older or duplicate node samples
+are rejected. DT_DECISIONS retains up to 10,000 messages for one hour and uses
+the durable infrastructure-controller consumer. Invalid events are terminated;
+handled decisions (including rejections) are acknowledged.
+
+An agent with TELEMETRY_PUBLISH_ENABLED=true exits when JetStream cannot be
+initialized. Twin/controller may start HTTP-only when NATS is absent at startup;
+restart them after NATS returns. Stream/subscription setup failures are logged.
+
+All three Go services expose `/metrics`. Twin metrics report node/stale counts;
+controller metrics report current audit/rejection counts. Telemetry gauges
+update during periodic sampling as well as GET /collect.
+
+To run the optional JetStream test against an isolated local server, set
+NATS_TEST_URL and run `go test ./internal/publisher` in telemetry-agent.

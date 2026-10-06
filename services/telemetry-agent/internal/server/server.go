@@ -23,6 +23,9 @@ func init() {
 	prometheus.MustRegister(cpuGauge, memGauge)
 }
 
+// Observe updates gauges for both periodic and HTTP-triggered samples.
+func Observe(m model.NodeMetrics) { cpuGauge.Set(m.CPUUtil); memGauge.Set(m.MemoryUtil) }
+
 // Deps wires collector + publisher + identity into HTTP handlers.
 type Deps struct {
 	NodeID    string
@@ -47,8 +50,7 @@ func Router(d Deps) *gin.Engine {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		cpuGauge.Set(m.CPUUtil)
-		memGauge.Set(m.MemoryUtil)
+		Observe(m)
 		ev := model.NewNodeMetricEvent(d.NodeID, m, time.Now().UTC())
 		if err := d.Publisher.Publish(ev); err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})

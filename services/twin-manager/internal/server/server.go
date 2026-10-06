@@ -2,6 +2,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 
 	"dt-ram/twin-manager/internal/fidelity"
@@ -22,6 +23,16 @@ type Deps struct {
 func Router(d Deps) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.GET("/metrics", func(c *gin.Context) {
+		nodes := d.Engine.Nodes()
+		stale := 0
+		for _, node := range nodes {
+			if node.Stale {
+				stale++
+			}
+		}
+		c.Data(http.StatusOK, "text/plain; version=0.0.4", []byte(fmt.Sprintf("# TYPE twin_nodes gauge\ntwin_nodes %d\n# TYPE twin_stale_nodes gauge\ntwin_stale_nodes %d\n", len(nodes), stale)))
+	})
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "twin-manager"})
 	})

@@ -6,6 +6,7 @@ package publisher
 import (
 	"encoding/json"
 	"log"
+	"time"
 
 	"dt-ram/telemetry-agent/internal/model"
 
@@ -32,6 +33,7 @@ func (LogPublisher) Close() error { return nil }
 // NATSPublisher publishes to NATS JetStream.
 type NATSPublisher struct {
 	nc      *nats.Conn
+	js      nats.JetStreamContext
 	subject string
 }
 
@@ -41,7 +43,17 @@ func NewNATS(url, subject string) (*NATSPublisher, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &NATSPublisher{nc: nc, subject: subject}, nil
+	js, err := nc.JetStream()
+	if err != nil {
+		nc.Close()
+		return nil, err
+	}
+	_, err = js.AddStream(&nats.StreamConfig{Name: "DT_TELEMETRY", Subjects: []string{subject}, Storage: nats.FileStorage, MaxAge: 24 * time.Hour, MaxMsgs: 100000})
+	if err != nil {
+		nc.Close()
+		return nil, err
+	}
+	return &NATSPublisher{nc: nc, js: js, subject: subject}, nil
 }
 
 func (p *NATSPublisher) Publish(ev model.NodeMetricEvent) error {
@@ -49,7 +61,8 @@ func (p *NATSPublisher) Publish(ev model.NodeMetricEvent) error {
 	if err != nil {
 		return err
 	}
-	return p.nc.Publish(p.subject, b)
+	_, err = p.js.Publish(p.subject, b)
+	return err
 }
 
 func (p *NATSPublisher) Close() error {
