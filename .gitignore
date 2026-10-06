@@ -140,6 +140,7 @@ lerna-debug.log*
 
 # Node build outputs
 dist/
+dist-test/
 build/
 .next/
 out/
