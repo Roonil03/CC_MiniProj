@@ -10,3 +10,11 @@ For complete architectural specifications, refer to [Design.md](../Design.md).
 4. **Predictive Analytics & Forecasting Layer** (`services/prediction-service/`)
 5. **Reinforcement Learning & Decision Engine** (`services/rl-service/`)
 6. **Safety & Policy Gate** (`services/safety-service/`)
+
+## Application boundary
+
+The API gateway validates and authenticates external requests, then delegates to the owning service. It contains no RL, forecasting, simulation, safety-policy, or Kubernetes logic. In particular, the approval endpoint delegates only to the safety service; it cannot call the Go infrastructure controller.
+
+The experiment service owns experiment metadata and persists it in PostgreSQL. Its required provenance fields follow the experiment registry in `Design.md`, while metrics/results remain structured JSON to support different experiment types.
+
+Dashboard aggregation is read-only and reports `degraded` when one or more dependencies are unavailable rather than fabricating state.
