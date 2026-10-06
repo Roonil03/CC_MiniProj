@@ -19,7 +19,10 @@ import (
 )
 
 func main() {
-	cfg := config.Default()
+	cfg, err := config.Load("configs/config.yaml")
+	if err != nil {
+		log.Fatalf("configuration: %v", err)
+	}
 	col := collector.New()
 
 	var pub publisher.Publisher = publisher.LogPublisher{}

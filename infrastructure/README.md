@@ -70,6 +70,14 @@ Compose waits for NATS/Redis health and persists JetStream under nats-data.
 The Helm directory remains a values/chart scaffold, without install templates.
 For cluster-free manifest regression checks, run `go test ./...` in infrastructure.
 
+Go services load optional `configs/config.yaml` relative to their working
+directory; images copy these files into /app/configs. Telemetry accepts equal,
+positive CPU/memory/network sample intervals; twin-manager loads its staleness
+limit; controller loads migration budget, minimum confidence and maximum SLO
+probability. SAFETY_MAX_MIGRATIONS_PER_MIN overrides the YAML budget. Invalid
+files or safety settings stop startup. Other YAML design fields are reference
+settings for future components and are not consumed by these services.
+
 ## Subjects
 
 See `infrastructure/networking/nats-subjects.yaml` for the NATS subject

@@ -25,7 +25,10 @@ import (
 )
 
 func main() {
-	cfg := config.Default()
+	cfg, err := config.Load("configs/config.yaml")
+	if err != nil {
+		log.Fatalf("configuration: %v", err)
+	}
 	gate := safety.New(cfg)
 	logStore := audit.New()
 

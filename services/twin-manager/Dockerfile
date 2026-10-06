@@ -9,6 +9,7 @@ RUN CGO_ENABLED=0 go build -o /out/twin ./cmd/twin
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 COPY --from=build /out/twin /app/twin
+COPY --from=build /src/configs /app/configs
 USER nonroot:nonroot
 EXPOSE 8080
 ENTRYPOINT ["/app/twin"]

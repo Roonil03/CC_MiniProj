@@ -22,7 +22,10 @@ import (
 )
 
 func main() {
-	cfg := config.Default()
+	cfg, err := config.Load("configs/config.yaml")
+	if err != nil {
+		log.Fatalf("configuration: %v", err)
+	}
 	var st store.Store = store.NewMemory()
 	if cfg.RedisAddr != "" {
 		persistent, err := store.NewRedis(cfg.RedisAddr)
