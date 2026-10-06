@@ -15,8 +15,8 @@ import (
 	"dt-ram/twin-manager/internal/config"
 	"dt-ram/twin-manager/internal/model"
 	"dt-ram/twin-manager/internal/server"
-	twinsync "dt-ram/twin-manager/internal/sync"
 	"dt-ram/twin-manager/internal/store"
+	twinsync "dt-ram/twin-manager/internal/sync"
 
 	"github.com/nats-io/nats.go"
 )
@@ -36,10 +36,12 @@ func main() {
 				NodeID    string    `json:"node_id"`
 				Timestamp time.Time `json:"timestamp"`
 				Metrics   struct {
-					CPU     float64 `json:"cpu"`
-					Memory  float64 `json:"memory"`
-					NetIn   float64 `json:"network_in"`
-					NetOut  float64 `json:"network_out"`
+					CPUTotal    float64 `json:"cpu_total"`
+					MemoryTotal float64 `json:"memory_total_mb"`
+					CPU         float64 `json:"cpu"`
+					Memory      float64 `json:"memory"`
+					NetIn       float64 `json:"network_in"`
+					NetOut      float64 `json:"network_out"`
 				} `json:"metrics"`
 			}
 			if err := json.Unmarshal(m.Data, &ev); err != nil {
@@ -48,6 +50,7 @@ func main() {
 			}
 			if _, err := engine.ApplyTelemetry(model.TelemetryIngest{
 				NodeID: ev.NodeID, CPUUtil: ev.Metrics.CPU, MemoryUtil: ev.Metrics.Memory,
+				CPUTotalCores: ev.Metrics.CPUTotal, MemoryTotalMB: ev.Metrics.MemoryTotal,
 				NetworkInMbps: ev.Metrics.NetIn, NetworkOutMbps: ev.Metrics.NetOut, Timestamp: ev.Timestamp,
 			}); err != nil {
 				log.Printf("sync reject: %v", err)

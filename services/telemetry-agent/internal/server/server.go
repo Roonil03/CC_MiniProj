@@ -50,7 +50,10 @@ func Router(d Deps) *gin.Engine {
 		cpuGauge.Set(m.CPUUtil)
 		memGauge.Set(m.MemoryUtil)
 		ev := model.NewNodeMetricEvent(d.NodeID, m, time.Now().UTC())
-		_ = d.Publisher.Publish(ev)
+		if err := d.Publisher.Publish(ev); err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, ev)
 	})
 	return r

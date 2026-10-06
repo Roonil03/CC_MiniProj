@@ -9,17 +9,17 @@ import "time"
 
 // NodeState mirrors Design.md Section 16 node representation.
 type NodeState struct {
-	NodeID            string    `json:"node_id"`
-	Location          string    `json:"location"`
-	CPUCoreTotal      float64   `json:"cpu_total"`
-	CPUUsedCores      float64   `json:"cpu_used"`
-	MemoryTotalMB     float64   `json:"memory_total_mb"`
-	MemoryUsedMB      float64   `json:"memory_used_mb"`
-	NetworkInMbps     float64   `json:"network_in_mbps"`
-	NetworkOutMbps    float64   `json:"network_out_mbps"`
-	LatencyToCloudMs  float64   `json:"latency_to_cloud_ms"`
-	Health            string    `json:"health"`
-	Timestamp         time.Time `json:"timestamp"`
+	NodeID           string    `json:"node_id"`
+	Location         string    `json:"location"`
+	CPUCoreTotal     float64   `json:"cpu_total"`
+	CPUUsedCores     float64   `json:"cpu_used"`
+	MemoryTotalMB    float64   `json:"memory_total_mb"`
+	MemoryUsedMB     float64   `json:"memory_used_mb"`
+	NetworkInMbps    float64   `json:"network_in_mbps"`
+	NetworkOutMbps   float64   `json:"network_out_mbps"`
+	LatencyToCloudMs float64   `json:"latency_to_cloud_ms"`
+	Health           string    `json:"health"`
+	Timestamp        time.Time `json:"timestamp"`
 }
 
 // WorkloadState mirrors Design.md Section 16 workload representation.
@@ -38,9 +38,11 @@ type WorkloadState struct {
 
 // NodeMetrics is the high-frequency sample collected by the agent.
 type NodeMetrics struct {
-	CPUUtil       float64 `json:"cpu"`         // 0..1
-	MemoryUtil    float64 `json:"memory"`      // 0..1
-	NetworkInMbps float64 `json:"network_in"`  // Mbps
+	CPUTotalCores  float64 `json:"cpu_total"`
+	MemoryTotalMB  float64 `json:"memory_total_mb"`
+	CPUUtil        float64 `json:"cpu"`         // 0..1
+	MemoryUtil     float64 `json:"memory"`      // 0..1
+	NetworkInMbps  float64 `json:"network_in"`  // Mbps
 	NetworkOutMbps float64 `json:"network_out"` // Mbps
 }
 
