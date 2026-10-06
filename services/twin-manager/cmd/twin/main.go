@@ -23,7 +23,15 @@ import (
 
 func main() {
 	cfg := config.Default()
-	st := store.NewMemory()
+	var st store.Store = store.NewMemory()
+	if cfg.RedisAddr != "" {
+		persistent, err := store.NewRedis(cfg.RedisAddr)
+		if err != nil {
+			log.Fatalf("configured Redis store unavailable: %v", err)
+		}
+		defer persistent.Close()
+		st = persistent
+	}
 	engine := twinsync.New(st, cfg.StaleAfter)
 
 	// Best-effort NATS subscriber for NODE_METRIC_UPDATED (optional in dev).

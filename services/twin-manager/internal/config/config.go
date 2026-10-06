@@ -11,14 +11,14 @@ import (
 
 // Config holds twin-manager runtime settings.
 type Config struct {
-	Port                 string
-	NATSURL              string
-	SubscribeSubject     string
-	RedisAddr            string
-	StaleAfter           time.Duration
-	FidelityAutonomous   float64
-	FidelityRestricted   float64
-	FidelitySimOnly      float64
+	Port               string
+	NATSURL            string
+	SubscribeSubject   string
+	RedisAddr          string
+	StaleAfter         time.Duration
+	FidelityAutonomous float64
+	FidelityRestricted float64
+	FidelitySimOnly    float64
 }
 
 // Default returns local-development defaults.
@@ -27,7 +27,7 @@ func Default() Config {
 		Port:               envOr("TWIN_MANAGER_PORT", "8080"),
 		NATSURL:            envOr("NATS_URL", "nats://localhost:4222"),
 		SubscribeSubject:   envOr("TWIN_SUBJECT", "dt.telemetry.node_metric"),
-		RedisAddr:          envOr("REDIS_ADDR", "localhost:6379"),
+		RedisAddr:          envOr("REDIS_ADDR", ""),
 		StaleAfter:         5 * time.Second,
 		FidelityAutonomous: 0.95,
 		FidelityRestricted: 0.90,

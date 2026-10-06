@@ -1,6 +1,6 @@
 // Package store keeps synchronized twin state.
 // MemoryStore is the hermetic default used in tests and local dev.
-// State is process-local; Redis and Postgres persistence are not yet implemented.
+// RedisStore adds opt-in write-through persistence. Postgres is not implemented.
 package store
 
 import (

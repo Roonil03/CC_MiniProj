@@ -21,8 +21,11 @@ validation. Fidelity must exceed 0.95 and prediction confidence must be at
 least 0.80; missing confidence is rejected. RESOURCE_ADJUST is unsupported.
 
 HTTP and NATS decisions share the same audit pipeline. `decision_id` is required
-for execution requests; reused IDs return 409 over HTTP. Audit and twin state
-are in memory and do not survive restarts. Redis/Postgres sinks are pending.
+for execution requests; reused IDs return 409 over HTTP. Audit is in memory.
+Twin state uses memory by default; set REDIS_ADDR for write-through persistence
+and startup restoration. Configured Redis failures reject updates; restoration
+failures stop startup. Deploy one twin-manager writer: hot reads are local.
+Postgres/Timescale currently provides DDL only, without an event sink.
 
 The controller exposes read-only `GET /infrastructure/nodes` (Kubernetes
 NodeList) and `GET /infrastructure/pods` (PodList restricted to K8S_NAMESPACE).
