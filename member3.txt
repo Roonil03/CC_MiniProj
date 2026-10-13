@@ -1,0 +1,54 @@
+MEMBER-3 WORK LOG — Python forecasting and data engineering
+Branch: feature/member3-prediction | 2026-10-13
+
+Scope
+- services/prediction-service: recording, forecast windows, models, training,
+  evaluation, model registry, read-only API, optional event publisher, tests,
+  container definition, and service guide.
+- datasets/README.md, docs/experiments.md, docs/paper/methodology.md:
+  data contract and forecasting experiment method.
+- No changes to the Go, Node, simulation, RL, safety, or Kubernetes services.
+
+Implemented
+- Validates the implemented Go NODE_METRIC_UPDATED schema (CPU/memory
+  fractions, network Mbps, node ID, timezone-aware observation time).
+- JSONL replay, JetStream durable consumer, commit-before-ack SQLite recording,
+  duplicate/conflict handling, replayable export with content hash and gap
+  report. No app-level targets are fabricated from node metrics.
+- Causal regularly spaced windows, chronological 60/20/20 partitions and
+  guarded validation regions. A missing bucket invalidates its window.
+- Persistence, ARIMA, ETS, LSTM, GRU, compact temporal convolution, common
+  per-horizon metrics and uncertainty calibration. Short synthetic fixtures
+  verify model code; no claim of scientific performance is made from them.
+- Versioned local registry with source/dataset/Git/software/artifact hashes,
+  explicit activation, read-only /models and /predictions, freshness checks,
+  service-token convention, and uncalibrated/unknown failure behavior.
+- Operational benchmark command for direct and HTTP timing, CPU seconds, RSS,
+  and artifact size. Dockerfile runs the API as a non-root user on port 5000.
+- Optional prediction event publisher with a proposed subject; shared stream
+  provisioning is outside this branch.
+
+Verification performed on this workspace
+- Python 3.11 virtual environment; runtime and dev dependencies installed.
+- 14 Member-3 unit/smoke tests passed (data/replay, windows, baseline models,
+  LSTM/GRU/temporal paths, registry/artifact integrity, API/staleness/auth,
+  benchmark path, and isolated event publication).
+- Python compileall passed; pip check reported no broken requirements.
+- git diff --check passed for tracked edits. No model weights, datasets,
+  credentials, or virtual environments were added to Git.
+
+Limits and integration handoff
+- No real forecasting accuracy or operational performance result exists yet:
+  this checkout has no recorded testbed telemetry or labeled workload traces.
+  The fixture benchmark only verifies execution.
+- Docker daemon was unavailable, so the image was not built or started here.
+- A live NATS server was not used for Member-3 tests. Consumer commit/ack and
+  publisher payload/ack behavior have isolated tests.
+- Member 2's historical Timescale sink, application telemetry, and the
+  prediction event stream are not implemented in the current shared stack.
+- The existing gateway routes to /predictions and /models, but an integrated
+  gateway-to-prediction runtime test has not been run.
+- Member 4's RL environment does not yet ingest these external forecasts.
+  The integrator must align entity order, units, and forecast horizons.
+- No Python component controls Kubernetes or emits a resource decision.
+- Work remains unmerged for review by the integrating member.
