@@ -11,7 +11,6 @@ from datetime import timezone
 from pathlib import Path
 
 import psutil
-from fastapi.testclient import TestClient
 
 from .data import SampleStore
 from .features import bucketed
@@ -29,7 +28,7 @@ def _percentile(values: list[float], proportion: float) -> float:
 
 
 def benchmark(db: str, registry_path: str, *, metric: str = "cpu",
-              repeats: int = 50) -> dict:
+              repeats: int = 50, service_url: str | None = None) -> dict:
     if repeats <= 0:
         raise ValueError("repeats must be positive")
     registry = Registry(registry_path)
@@ -70,24 +69,36 @@ def benchmark(db: str, registry_path: str, *, metric: str = "cpu",
     cpu_after = process.cpu_times()
     rss_after = process.memory_info().rss
 
-    # Use the historical sample time as the API clock. This benchmark does
-    # not simulate live freshness, which is covered by service tests.
-    api = create_app(db_path=db, registry_path=registry_path,
-                     now=lambda: samples[-1].timestamp.astimezone(timezone.utc))
-    client = TestClient(api)
     import os
     token = os.getenv("DT_RAM_SERVICE_TOKEN")
     headers = {"x-service-token": token} if token else {}
     url = f"/predictions?node_id={node_id}&metric={metric}"
-    if client.get(url, headers=headers).status_code != 200:
-        raise ValueError("prediction API did not become ready")
-    http_durations = []
-    for _ in range(repeats):
-        started = time.perf_counter()
-        response = client.get(url, headers=headers)
-        if response.status_code != 200:
-            raise ValueError(f"prediction API returned {response.status_code}")
-        http_durations.append(1000 * (time.perf_counter() - started))
+    if service_url:
+        import httpx
+        client = httpx.Client(base_url=service_url.rstrip("/"), timeout=5)
+    else:
+        from fastapi.testclient import TestClient
+        # Historical samples need a matching logical clock. TestClient measures
+        # the app in-process; it does not include a socket or a reverse proxy.
+        api = create_app(db_path=db, registry_path=registry_path,
+                         now=lambda: samples[-1].timestamp.astimezone(timezone.utc))
+        client = TestClient(api)
+    try:
+        http_durations = []
+        for index in range(repeats + 1):
+            started = time.perf_counter()
+            response = client.get(url, headers=headers)
+            elapsed = 1000 * (time.perf_counter() - started)
+            if response.status_code != 200:
+                raise ValueError(f"prediction API returned {response.status_code}")
+            predictions = response.json().get("predictions", [])
+            if not predictions or any(p["model_id"] != record["model_id"]
+                                      for p in predictions):
+                raise ValueError("prediction API is not serving the selected model")
+            if index > 0:
+                http_durations.append(elapsed)
+    finally:
+        client.close()
 
     def summary(values):
         return {"mean_ms": statistics.mean(values), "median_ms": statistics.median(values),
@@ -98,6 +109,7 @@ def benchmark(db: str, registry_path: str, *, metric: str = "cpu",
         "dataset_version": record["training_dataset"], "repeats": repeats,
         "python": platform.python_version(), "platform": platform.platform(),
         "logical_cpus": psutil.cpu_count(),
+        "http_mode": "live_network" if service_url else "in_process",
         "direct_inference": summary(durations), "http_request": summary(http_durations),
         "process_cpu_seconds": (cpu_after.user + cpu_after.system
                                 - cpu_before.user - cpu_before.system),
@@ -113,9 +125,11 @@ def main() -> None:
     parser.add_argument("--registry", required=True)
     parser.add_argument("--metric", default="cpu")
     parser.add_argument("--repeats", type=int, default=50)
+    parser.add_argument("--service-url", help="measure a running service with fresh telemetry")
     parser.add_argument("--output")
     args = parser.parse_args()
-    result = benchmark(args.db, args.registry, metric=args.metric, repeats=args.repeats)
+    result = benchmark(args.db, args.registry, metric=args.metric, repeats=args.repeats,
+                       service_url=args.service_url)
     payload = json.dumps(result, indent=2)
     if args.output:
         target = Path(args.output)

@@ -18,11 +18,14 @@ their partition. Use the validation period for training decisions and
 interval calibration, and select the serving candidate based on validation
 error and measured inference cost before interpreting final test scores.
 
-Compare persistence, ARIMA, ETS, LSTM, GRU, and the lightweight temporal
-model on per-horizon MAE, RMSE, defined MAPE and R², and interval coverage.
-Measure direct inference and HTTP latency, CPU seconds, process RSS, and
-artifact size on named hardware. Check the design's prediction latency target
-of less than 100 ms; report the measured value even if it misses. Evaluate
+Compare persistence, ARIMA, ETS, LSTM, GRU, the lightweight temporal
+convolution, and the lightweight Transformer on per-horizon MAE, RMSE,
+defined MAPE and R², and interval coverage.
+Measure direct inference and live-network HTTP latency, CPU seconds, process
+RSS, and artifact size on named hardware. The in-process HTTP benchmark is a
+software check; server resource use requires separate deployment monitoring.
+Check the design's prediction latency target of less than 100 ms; report the
+measured value even if it misses. Evaluate
 stable, periodic, bursty, and fault periods when those labeled observations
 exist. Synthetic software fixtures verify behavior only and must never be
 reported as testbed research findings.

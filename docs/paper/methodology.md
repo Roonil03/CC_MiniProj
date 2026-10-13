@@ -17,8 +17,9 @@ latest observation, using only contiguous past samples. Chronological
 train/validation/test partitions are 60/20/20; labels must remain within
 their partition. The validation interval is divided again for model tuning,
 uncertainty calibration, and coverage assessment. Persistence and ARIMA/ETS
-are baselines; LSTM, GRU, and a compact temporal convolution are compared on
-the same target definitions. Statistical baselines require per-origin refits.
+are baselines; LSTM, GRU, a compact temporal convolution, and a one-layer
+Transformer encoder are compared on the same target definitions. Statistical
+baselines require per-origin refits.
 Tuning and test scores for all models use the same evenly spaced sample of
 up to 64 forecast origins. Calibration and audit origins are spaced at least
 one maximum forecast horizon apart.

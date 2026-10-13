@@ -1,54 +1,71 @@
-MEMBER-3 WORK LOG — Python forecasting and data engineering
-Branch: feature/member3-prediction | 2026-10-13
+MEMBER 3 WORK LOG - Python forecasting and data engineering
+Branch: feature/member3-prediction | Updated: 2026-10-13
 
-Scope
-- services/prediction-service: recording, forecast windows, models, training,
-  evaluation, model registry, read-only API, optional event publisher, tests,
-  container definition, and service guide.
-- datasets/README.md, docs/experiments.md, docs/paper/methodology.md:
-  data contract and forecasting experiment method.
-- No changes to the Go, Node, simulation, RL, safety, or Kubernetes services.
+Ownership and boundary
+- Owns services/prediction-service and datasets; prediction experiment and
+  methodology documentation is shared. This branch does not change the Go,
+  Node, Digital Twin, RL, safety, or Kubernetes services.
+- Python records telemetry and serves forecasts. It does not issue resource
+  decisions or control Kubernetes. Integration and merging are for the other
+  members later.
 
-Implemented
-- Validates the implemented Go NODE_METRIC_UPDATED schema (CPU/memory
-  fractions, network Mbps, node ID, timezone-aware observation time).
-- JSONL replay, JetStream durable consumer, commit-before-ack SQLite recording,
-  duplicate/conflict handling, replayable export with content hash and gap
-  report. No app-level targets are fabricated from node metrics.
-- Causal regularly spaced windows, chronological 60/20/20 partitions and
-  guarded validation regions. A missing bucket invalidates its window.
-- Persistence, ARIMA, ETS, LSTM, GRU, compact temporal convolution, common
-  per-horizon metrics and uncertainty calibration. Short synthetic fixtures
-  verify model code; no claim of scientific performance is made from them.
-- Versioned local registry with source/dataset/Git/software/artifact hashes,
-  explicit activation, read-only /models and /predictions, freshness checks,
-  service-token convention, and uncalibrated/unknown failure behavior.
-- Operational benchmark command for direct and HTTP timing, CPU seconds, RSS,
-  and artifact size. Dockerfile runs the API as a non-root user on port 5000.
-- Optional prediction event publisher with a proposed subject; shared stream
-  provisioning is outside this branch.
+Deliverables against Design.md sections 72-73
+1. Dataset schema: implemented and validated for the existing Go
+   NODE_METRIC_UPDATED event: timestamp, node ID, CPU/memory fractions, and
+   incoming/outgoing network Mbit/s. The wider design's application latency,
+   queue, request rate, placement, migration, and SLO fields have no verified
+   producer in this checkout and are not fabricated.
+2. Ingestion: JSONL import/replay, durable JetStream consumer, commit-before-ack
+   SQLite recording, duplicate/conflict handling, export with content hash and
+   missing-bucket report. Live NATS collection still needs a running stack.
+3. Baselines: persistence, ARIMA, and ETS implemented and smoke-tested.
+4. Recurrent models: LSTM and GRU training/evaluation implemented and tested.
+5. Lightweight models: compact temporal convolution and a one-layer Transformer
+   encoder (2,418 parameters) implemented, trained, saved, reloaded, and
+   evaluated on a labeled synthetic software fixture. Real workload comparison
+   remains pending.
+6. Prediction service: versioned model registry, explicit activation, artifact
+   hash verification, read-only /models and /predictions, freshness and token
+   checks, Dockerfile, and service guide. The Transformer was served through a
+   real local Uvicorn HTTP socket. The Docker image was not built because the
+   Docker daemon is unavailable here.
+7. Operational benchmark: direct inference, in-process HTTP, and optional
+   live-network HTTP measurement with selected-model verification, latency
+   summary, client CPU/RSS, model size, host, and dataset identity. The actual
+   target-hardware/testbed benchmark is pending a real recorded dataset and
+   deployment.
 
-Verification performed on this workspace
-- Python 3.11 virtual environment; runtime and dev dependencies installed.
-- 14 Member-3 unit/smoke tests passed (data/replay, windows, baseline models,
-  LSTM/GRU/temporal paths, registry/artifact integrity, API/staleness/auth,
-  benchmark path, and isolated event publication).
-- Python compileall passed; pip check reported no broken requirements.
-- git diff --check passed for tracked edits. No model weights, datasets,
-  credentials, or virtual environments were added to Git.
+Verification on this checkout
+- All 14 Member 3 unit/smoke tests pass, including the Transformer shape,
+  training/artifact reload, registry activation, and existing data/API checks.
+- Python compilation, pip dependency check, and Git whitespace/diff checks
+  pass. No datasets, weights, credentials, or virtual environments are tracked.
+- Local live HTTP smoke: 360 synthetic 1-second node samples, Transformer CPU
+  forecast with 8-step history and 1/2-second horizons, 2 training epochs,
+  Uvicorn on localhost, and 50 measured HTTP requests. Direct inference p95
+  was 0.61 ms; localhost HTTP p95 was 11.53 ms on this Windows host (12 logical
+  CPUs). The ignored report is at experiments/runs/member3-synthetic-http-smoke.json.
+  This verifies software execution only: synthetic data, an extended freshness
+  limit, and local hardware do not establish real forecasting accuracy or the
+  design's production <100 ms prediction target.
 
-Limits and integration handoff
-- No real forecasting accuracy or operational performance result exists yet:
-  this checkout has no recorded testbed telemetry or labeled workload traces.
-  The fixture benchmark only verifies execution.
-- Docker daemon was unavailable, so the image was not built or started here.
-- A live NATS server was not used for Member-3 tests. Consumer commit/ack and
-  publisher payload/ack behavior have isolated tests.
-- Member 2's historical Timescale sink, application telemetry, and the
-  prediction event stream are not implemented in the current shared stack.
-- The existing gateway routes to /predictions and /models, but an integrated
-  gateway-to-prediction runtime test has not been run.
-- Member 4's RL environment does not yet ingest these external forecasts.
-  The integrator must align entity order, units, and forecast horizons.
-- No Python component controls Kubernetes or emits a resource decision.
-- Work remains unmerged for review by the integrating member.
+Remaining Member 3 validation when shared infrastructure/data is available
+- Record the project's own testbed telemetry through the existing collector;
+  export and preserve its manifest, topology, workload/fault schedule, and data
+  version. Obtain a verified application telemetry contract before extending
+  targets beyond node CPU/memory/network.
+- Train and compare the baselines, LSTM, GRU, temporal model, and Transformer
+  on the same real dataset, chronological partitions, and forecast horizons.
+  Review accuracy, interval coverage, model size, and measured cost before
+  activating a model. Do not report synthetic fixture scores as research results.
+- Run the live-network benchmark on the intended hardware with fresh telemetry;
+  separately measure server CPU/RSS and record whether the <100 ms target is met.
+- Build/run the Docker image and test the collector against live JetStream when
+  the Docker/NATS environment is available. A full gateway-to-prediction runtime
+  contract test awaits integration with Member 1.
+
+Shared integration handoff (not Member 3 ownership)
+- Member 2/shared stack must provide historical/application telemetry and review
+  provisioning of the proposed NODE_FORECAST_UPDATED subject if event output is
+  selected. Member 4/integrator must consume forecasts with aligned entity IDs,
+  units, horizons, and confidence handling. Another member will merge this branch.

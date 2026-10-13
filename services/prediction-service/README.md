@@ -44,8 +44,9 @@ records outside Git when conducting research.
 
 ## Train and compare
 
-Run the same command for `persistence`, `arima`, `ets`, `lstm`, `gru`, and
-`temporal`, and for each available metric (`cpu`, `memory`, `network_in`,
+Run the same command for `persistence`, `arima`, `ets`, `lstm`, `gru`,
+`temporal` (compact convolution), and `transformer` (one small self-attention
+encoder), and for each available metric (`cpu`, `memory`, `network_in`,
 `network_out`). Example:
 
 ```text
@@ -126,11 +127,17 @@ After selecting a model, run:
 python -m prediction_app.benchmark --db data/node_samples.sqlite --registry models_saved/registry.json --metric cpu --repeats 50 --output ../../experiments/runs/prediction-benchmark.json
 ```
 
-The report contains direct inference and HTTP mean/median/p95/max timings,
-CPU seconds, process RSS, artifact bytes, host details, dataset version, and
-repeat count. It uses recorded observations and their historical timestamp;
-freshness and outage behavior are verified separately. The design's
-prediction budget is below 100 ms, to be checked on the intended hardware.
+The default HTTP measurement uses an in-process test client and the historical
+sample timestamp, so it verifies application overhead without a network hop.
+For an operational HTTP measurement, run the service with the same database and
+active registry, ensure telemetry remains fresh, and add
+`--service-url http://127.0.0.1:5000`. The benchmark verifies that this service
+returns the selected model before recording live-network timings. The report
+labels its HTTP mode and contains direct inference and HTTP mean/median/p95/max
+timings, client-process CPU seconds/RSS, artifact bytes, host details, dataset
+version, and repeat count. Server CPU/RSS must be measured separately in a
+deployed setup. The design's prediction budget is below 100 ms, to be checked
+on the intended hardware using real recorded telemetry.
 
 The Dockerfile starts the API on port 5000 as a non-root user. Mount writable
 `/data` for recorded samples and `/models` for reviewed artifacts, supply the

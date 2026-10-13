@@ -5,7 +5,7 @@ from pathlib import Path
 
 from prediction_app.data import NodeSample, SampleStore
 from prediction_app.evaluation import metrics, observed_coverage, residual_radius
-from prediction_app.models import neural_network, persistence, statistical
+from prediction_app.models import neural_network, persistence, predict_neural, statistical
 from prediction_app.benchmark import benchmark
 from prediction_app.registry import Registry
 from prediction_app.training import run_training
@@ -30,9 +30,9 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(result["radius"], 2)
         self.assertEqual(observed_coverage([1, 2], [1, 1], 1), 1.0)
 
-    def test_recurrent_and_temporal_shapes(self):
+    def test_neural_shapes(self):
         import torch
-        for kind in ("lstm", "gru", "temporal"):
+        for kind in ("lstm", "gru", "temporal", "transformer"):
             with self.subTest(kind=kind):
                 network = neural_network(kind, history_steps=8, outputs=2)
                 output = network(torch.ones((3, 8)))
@@ -58,24 +58,34 @@ class ModelTests(unittest.TestCase):
             gru = run_training(str(database), str(output), metric="cpu", kind="gru",
                                history_steps=8, horizons=(1, 2), epochs=3,
                                source_label="synthetic-test-fixture")
-            for kind in ("lstm", "temporal"):
+            transformer = None
+            for kind in ("lstm", "temporal", "transformer"):
                 other = run_training(str(database), str(output), metric="cpu",
                                      kind=kind, history_steps=8,
                                      horizons=(1, 2), epochs=2,
                                      source_label="synthetic-test-fixture")
                 self.assertEqual(len(other["artifact_hash"]), 64)
+                if kind == "transformer":
+                    transformer = other
             self.assertEqual(len(gru["artifact_hash"]), 64)
             self.assertEqual(gru["hyperparameters"]["seed"], 42)
             registry = Registry(output / "registry.json")
-            self.assertEqual(len(registry.records()), 4)
+            self.assertEqual(len(registry.records()), 5)
             registry.activate(gru["model_id"])
             self.assertEqual(registry.selected("cpu")["model_id"], gru["model_id"])
             network, scale = registry.load_network(gru)
             self.assertTrue(math.isfinite(scale.center))
             self.assertIsNotNone(network)
+            registry.activate(transformer["model_id"])
+            self.assertEqual(registry.selected("cpu")["model_id"], transformer["model_id"])
+            network, scale = registry.load_network(transformer)
+            self.assertTrue(all(math.isfinite(value) for value in
+                                predict_neural(network, scale, (0.3,) * 8)))
+            registry.activate(gru["model_id"])
             report = benchmark(str(database), str(output / "registry.json"), repeats=3)
             self.assertEqual(report["model_id"], gru["model_id"])
             self.assertEqual(report["repeats"], 3)
+            self.assertEqual(report["http_mode"], "in_process")
             weights = output / gru["weights_file"]
             weights.write_bytes(weights.read_bytes() + b"bad")
             with self.assertRaisesRegex(ValueError, "hash"):

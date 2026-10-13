@@ -16,7 +16,7 @@ from .evaluation import metrics, observed_coverage, residual_radius
 from .features import build_windows, split_windows
 from .models import fit_neural, persistence, predict_neural, statistical
 
-KINDS = ("persistence", "arima", "ets", "lstm", "gru", "temporal")
+KINDS = ("persistence", "arima", "ets", "lstm", "gru", "temporal", "transformer")
 
 
 def _versions() -> dict[str, str]:

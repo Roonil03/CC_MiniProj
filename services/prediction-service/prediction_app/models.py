@@ -77,12 +77,31 @@ def neural_network(kind: str, history_steps: int, outputs: int, hidden: int = 16
         def forward(self, x):
             return self.head(torch.relu(self.depthwise(x.unsqueeze(1))).squeeze(1))
 
+    class TinyTransformer(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.embedding = nn.Linear(1, hidden)
+            self.position = nn.Parameter(torch.zeros(1, history_steps, hidden))
+            nn.init.normal_(self.position, std=0.02)
+            layer = nn.TransformerEncoderLayer(
+                d_model=hidden, nhead=4 if hidden % 4 == 0 else 1,
+                dim_feedforward=2 * hidden, dropout=0.0, batch_first=True,
+                activation="gelu")
+            self.encoder = nn.TransformerEncoder(layer, num_layers=1)
+            self.head = nn.Linear(hidden, outputs)
+
+        def forward(self, x):
+            encoded = self.encoder(self.embedding(x.unsqueeze(-1)) + self.position)
+            return self.head(encoded[:, -1])
+
     if kind == "lstm":
         return Recurrent(nn.LSTM)
     if kind == "gru":
         return Recurrent(nn.GRU)
     if kind == "temporal":
         return TinyTemporal()
+    if kind == "transformer":
+        return TinyTransformer()
     raise ValueError("unknown neural model")
 
 
