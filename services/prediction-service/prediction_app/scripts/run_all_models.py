@@ -32,7 +32,7 @@ except ImportError:  # pragma: no cover - documented as an optional fallback
 from ..data import METRICS, SampleStore
 from ..training import KINDS, run_training
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 SERVICE_ROOT = REPO_ROOT / "services" / "prediction-service"
 DEFAULT_RUN_DIR = REPO_ROOT / "experiments" / "runs" / "model-sweep"
 STATE_FILE = "run_state.json"
