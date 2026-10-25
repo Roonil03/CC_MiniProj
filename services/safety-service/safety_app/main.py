@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
+import json
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
@@ -87,13 +88,8 @@ async def _publish(event: dict) -> dict:
     connection = await nats.connect(nats_url)
     try:
         jetstream = connection.jetstream()
-        try:
-            await jetstream.add_stream(name="DT_DECISIONS", subjects=["dt.decisions.resource"])
-        except Exception:
-            # The stream is shared and may already have been provisioned.
-            pass
         acknowledgement = await jetstream.publish(
-            "dt.decisions.resource", __import__("json").dumps(event, allow_nan=False).encode()
+            "dt.decisions.resource", json.dumps(event, allow_nan=False).encode()
         )
         return {"stream": acknowledgement.stream, "sequence": acknowledgement.seq}
     finally:
