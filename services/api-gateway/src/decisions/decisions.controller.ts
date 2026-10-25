@@ -12,9 +12,7 @@ export class DecisionsController {
   @Post('simulate')
   async simulate(@Body() decision: DecisionDto) {
     const context = await this.context(decision);
-    return this.upstream.request('simulation', '/simulate', {
-      method: 'POST', body: JSON.stringify(context.simulationRequest),
-    });
+    return context.simulationResult;
   }
 
   @Post('approve')
@@ -39,18 +37,32 @@ export class DecisionsController {
     const nodes = (Array.isArray(twinBody.nodes) ? twinBody.nodes : []).filter(isRecord).map(toSimulationNode);
     const forecast = shortestForecast(predictions.data, decision.action);
     const action = toCanonicalAction(decision.action);
-    return {
-      simulationRequest: {
+    const simulationRequest = {
         nodes,
         candidates: [action],
         predicted: forecast ?? decision.predicted ?? {},
-      },
+        dt_fidelity: twinFidelity(nodes),
+    };
+    const simulationResult = await this.upstream.request<Record<string, any>>('simulation', '/simulate', {
+      method: 'POST', body: JSON.stringify(simulationRequest),
+    });
+    const simulated = Array.isArray(simulationResult.results) ? simulationResult.results[0] : undefined;
+    const predicted = simulated ? {
+      cpu: simulated.predicted_cpu,
+      memory: simulated.predicted_mem,
+      latency: simulated.predicted_latency_ms,
+      slo_violation_probability: simulated.slo_violation_prob,
+      prediction_confidence: simulated.prediction_confidence ?? 0,
+    } : (forecast ?? decision.predicted ?? {});
+    return {
+      simulationRequest,
+      simulationResult,
       safetyContext: {
         dt_fidelity: twinFidelity(nodes),
         destination_free_cpu: destinationFreeCpu(nodes, action.destination),
         destination_healthy: nodeHealthy(nodes, action.destination),
         source_healthy: nodeHealthy(nodes, action.source),
-        predicted: forecast ?? decision.predicted ?? {},
+        predicted,
       },
     };
   }

@@ -21,7 +21,7 @@ describe('DecisionsController safety boundary', () => {
 
     await controller.approve(decision);
 
-    assert.deepEqual(calls[2], ['safety', '/decisions/approve', {
+    assert.deepEqual(calls[3], ['safety', '/decisions/approve', {
       method: 'POST',
       body: JSON.stringify({
         decision_id: 'decision-123',
@@ -43,12 +43,13 @@ describe('DecisionsController safety boundary', () => {
       policyVersion: 'ppo-v1',
       action: { type: 'RESOURCE_ADJUST', cpuDelta: 0.1 },
     });
-    assert.deepEqual(calls[0], ['simulation', '/simulate', {
+    assert.deepEqual(calls[2], ['simulation', '/simulate', {
       method: 'POST',
       body: JSON.stringify({
         nodes: [],
         candidates: [{ type: 'RESOURCE_ADJUST', cpu_delta: 0.1 }],
         predicted: {},
+        dt_fidelity: 0,
       }),
     }]);
   });

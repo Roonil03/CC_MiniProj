@@ -9,12 +9,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import math
 from typing import Any
 
 
 @dataclass
 class GateConfig:
-    min_fidelity: float = 0.80
+    min_fidelity: float = 0.95
     min_confidence: float = 0.80
     max_slo_prob: float = 0.10
     max_migrations_per_minute: int = 3
@@ -46,18 +47,27 @@ class SafetyGate:
         if atype == "NOOP":
             return Verdict(True, ["noop always safe"])
 
-        fidelity = float(request.get("dt_fidelity", 0.0))
-        if fidelity < self.config.min_fidelity:
+        try:
+            fidelity = float(request.get("dt_fidelity", 0.0))
+        except (TypeError, ValueError):
+            fidelity = float("nan")
+        if not math.isfinite(fidelity) or fidelity <= self.config.min_fidelity:
             reasons.append(
                 f"dt fidelity {fidelity:.3f} below minimum {self.config.min_fidelity:.3f}: disable RL actuation"
             )
-        conf = float(predicted.get("prediction_confidence", 0.0) or 0.0)
-        if 0.0 < conf < self.config.min_confidence:
+        try:
+            conf = float(predicted.get("prediction_confidence", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            conf = float("nan")
+        if not math.isfinite(conf) or conf < self.config.min_confidence:
             reasons.append(
                 f"prediction confidence {conf:.3f} below minimum {self.config.min_confidence:.3f}"
             )
-        slo_p = float(predicted.get("slo_violation_probability", 1.0))
-        if slo_p > self.config.max_slo_prob:
+        try:
+            slo_p = float(predicted.get("slo_violation_probability", 1.0))
+        except (TypeError, ValueError):
+            slo_p = float("nan")
+        if not math.isfinite(slo_p) or slo_p < 0.0 or slo_p > self.config.max_slo_prob:
             reasons.append(
                 f"predicted SLO violation probability {slo_p:.3f} exceeds max {self.config.max_slo_prob:.3f}"
             )
@@ -66,7 +76,11 @@ class SafetyGate:
         if atype in ("MIGRATE", "PLACE"):
             if not request.get("destination_healthy", False):
                 reasons.append("destination node unhealthy or unavailable")
-            if float(request.get("destination_free_cpu", 0.0)) <= 0:
+            try:
+                destination_free_cpu = float(request.get("destination_free_cpu", 0.0))
+            except (TypeError, ValueError):
+                destination_free_cpu = float("nan")
+            if not math.isfinite(destination_free_cpu) or destination_free_cpu <= 0:
                 reasons.append("destination lacks free capacity")
 
         if atype == "MIGRATE":
