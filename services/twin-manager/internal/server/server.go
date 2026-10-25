@@ -4,6 +4,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"os"
 
 	"dt-ram/twin-manager/internal/fidelity"
 	"dt-ram/twin-manager/internal/model"
@@ -23,6 +24,14 @@ type Deps struct {
 func Router(d Deps) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
+	serviceToken := os.Getenv("DT_RAM_SERVICE_TOKEN")
+	r.Use(func(c *gin.Context) {
+		if serviceToken != "" && c.Request.URL.Path != "/healthz" && c.Request.URL.Path != "/readyz" && c.Request.URL.Path != "/metrics" && c.GetHeader("x-service-token") != serviceToken {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		c.Next()
+	})
 	r.GET("/metrics", func(c *gin.Context) {
 		nodes := d.Engine.Nodes()
 		stale := 0
@@ -34,6 +43,9 @@ func Router(d Deps) *gin.Engine {
 		c.Data(http.StatusOK, "text/plain; version=0.0.4", []byte(fmt.Sprintf("# TYPE twin_nodes gauge\ntwin_nodes %d\n# TYPE twin_stale_nodes gauge\ntwin_stale_nodes %d\n", len(nodes), stale)))
 	})
 	r.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "twin-manager"})
+	})
+	r.GET("/readyz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "twin-manager"})
 	})
 	r.GET("/twin/state", func(c *gin.Context) {

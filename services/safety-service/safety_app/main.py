@@ -41,7 +41,7 @@ gate = SafetyGate(GateConfig())
 @app.middleware("http")
 async def service_auth(request: Request, call_next):
     token = os.getenv("DT_RAM_SERVICE_TOKEN")
-    if token and request.url.path not in {"/healthz"}:
+    if token and request.url.path not in {"/healthz", "/readyz"}:
         if request.headers.get("x-service-token") != token:
             from fastapi.responses import JSONResponse
             return JSONResponse({"detail": "unauthorized"}, status_code=401)
@@ -50,6 +50,11 @@ async def service_auth(request: Request, call_next):
 
 @app.get("/healthz")
 def healthz() -> dict:
+    return {"status": "ok", "service": "safety-service"}
+
+
+@app.get("/readyz")
+def readyz() -> dict:
     return {"status": "ok", "service": "safety-service"}
 
 

@@ -6,13 +6,25 @@ actions against twin state supplied in the request. Propose-only.
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+import os
+
+from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
 
 from .simulator import evaluate_candidates
 from .twin import TwinState
 
 app = FastAPI(title="dt-ram simulation-service")
+
+
+@app.middleware("http")
+async def service_auth(request: Request, call_next):
+    token = os.getenv("DT_RAM_SERVICE_TOKEN")
+    if token and request.url.path not in {"/healthz", "/readyz"}:
+        if request.headers.get("x-service-token") != token:
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    return await call_next(request)
 
 
 class SimulateRequest(BaseModel):
@@ -26,6 +38,11 @@ class SimulateRequest(BaseModel):
 
 @app.get("/healthz")
 def healthz() -> dict:
+    return {"status": "ok", "service": "simulation-service"}
+
+
+@app.get("/readyz")
+def readyz() -> dict:
     return {"status": "ok", "service": "simulation-service"}
 
 

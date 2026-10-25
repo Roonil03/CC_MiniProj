@@ -74,6 +74,7 @@ services:
       NATS_URL: nats://nats:4222
       TWIN_SUBJECT: dt.telemetry.node_metric
       REDIS_ADDR: redis:6379
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
     ports:
       - "8080:8080"
     depends_on:
@@ -97,6 +98,7 @@ services:
       K8S_NAMESPACE: dt-ram
       CONTROLLER_DRY_RUN: "true"
       SAFETY_MAX_MIGRATIONS_PER_MIN: "3"
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
     ports:
       - "8081:8081"
     depends_on:
