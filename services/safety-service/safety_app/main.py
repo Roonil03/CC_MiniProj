@@ -69,6 +69,7 @@ def policies() -> dict:
         "max_migrations_per_minute": config.max_migrations_per_minute,
         "node_cooldown_seconds": config.node_cooldown_seconds,
         "execution_modes": ["shadow"],
+        "supported_actions": ["NOOP", "MIGRATE", "PLACE", "SCALE"],
         "physical_actuation": False,
     }
 
@@ -100,6 +101,8 @@ async def _publish(event: dict) -> dict:
 async def approve(req: ApproveRequest) -> dict:
     if req.execution_mode != "shadow":
         raise HTTPException(status_code=422, detail="only shadow execution is available")
+    if str(req.action.get("type", "")).upper() == "RESOURCE_ADJUST":
+        raise HTTPException(status_code=422, detail="RESOURCE_ADJUST is not supported by the Go controller")
     verdict = gate.evaluate(req.model_dump())
     if not verdict.approved:
         raise HTTPException(status_code=422, detail={"approved": False, "reasons": verdict.reasons})
