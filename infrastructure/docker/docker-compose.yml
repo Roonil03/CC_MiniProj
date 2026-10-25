@@ -108,6 +108,114 @@ services:
           cpus: "0.50"
           memory: 256M
 
+  prediction-service:
+    build:
+      context: ../../services/prediction-service
+    environment:
+      PREDICTION_DATA_PATH: /data/node_samples.sqlite
+      PREDICTION_REGISTRY_PATH: /models/registry.json
+      PREDICTION_MAX_AGE_SECONDS: "5"
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+    volumes:
+      - prediction-data:/data
+      - prediction-models:/models
+    ports:
+      - "5000:5000"
+    depends_on:
+      nats:
+        condition: service_healthy
+
+  prediction-collector:
+    build:
+      context: ../../services/prediction-service
+    command: ["python", "-m", "prediction_app.collector", "--db", "/data/node_samples.sqlite", "listen", "--nats-url", "nats://nats:4222"]
+    environment:
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+    volumes:
+      - prediction-data:/data
+    depends_on:
+      nats:
+        condition: service_healthy
+
+  simulation-service:
+    build:
+      context: ../../services/simulation-service
+    environment:
+      SIMULATION_SERVICE_PORT: 5002
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+    ports:
+      - "5002:5002"
+
+  safety-service:
+    build:
+      context: ../..
+      dockerfile: services/safety-service/Dockerfile
+    environment:
+      SAFETY_SERVICE_PORT: 5003
+      NATS_URL: nats://nats:4222
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+    ports:
+      - "5003:5003"
+    depends_on:
+      nats:
+        condition: service_healthy
+
+  experiment-service:
+    build:
+      context: ../../services/experiment-service
+    environment:
+      EXPERIMENT_SERVICE_PORT: 3001
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+      DATABASE_URL: postgres://dt_user:dt_password_change_me@postgres:5432/dt_ram
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api-gateway:
+    build:
+      context: ../../services/api-gateway
+    environment:
+      API_GATEWAY_PORT: 3000
+      DT_RAM_API_KEY: ${DT_RAM_API_KEY:-development-api-key}
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+      EXPERIMENT_SERVICE_URL: http://experiment-service:3001
+      INFRASTRUCTURE_CONTROLLER_URL: http://infrastructure-controller:8081
+      TWIN_MANAGER_URL: http://twin-manager:8080
+      PREDICTION_SERVICE_URL: http://prediction-service:5000
+      SIMULATION_SERVICE_URL: http://simulation-service:5002
+      SAFETY_SERVICE_URL: http://safety-service:5003
+    ports:
+      - "3000:3000"
+    depends_on:
+      experiment-service:
+        condition: service_started
+      infrastructure-controller:
+        condition: service_started
+      twin-manager:
+        condition: service_started
+      prediction-service:
+        condition: service_started
+      simulation-service:
+        condition: service_started
+      safety-service:
+        condition: service_started
+
+  rl-service:
+    profiles: ["experiments"]
+    build:
+      context: ../..
+      dockerfile: services/rl-service/Dockerfile
+    environment:
+      RL_SEED: "42"
+      RL_OUTPUT: /runs/member4
+    volumes:
+      - experiment-runs:/runs
+    depends_on:
+      simulation-service:
+        condition: service_started
+
   prometheus:
     image: prom/prometheus:v2.53.2
     volumes:
@@ -119,3 +227,6 @@ volumes:
   nats-data:
   redis-data:
   pg-data:
+  prediction-data:
+  prediction-models:
+  experiment-runs:

@@ -7,12 +7,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 WORKDIR /srv/safety-service
 
-COPY requirements.txt ./
+COPY services/safety-service/requirements.txt ./
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
+COPY services/safety-service/safety_app ./safety_app
+COPY services/simulation-service/app /srv/simulation-service/app
 ENV PYTHONPATH="/srv/safety-service:/srv/simulation-service:${PYTHONPATH}"
 
 EXPOSE 5003
