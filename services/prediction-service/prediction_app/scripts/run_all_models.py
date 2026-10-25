@@ -137,6 +137,7 @@ def configure_logging(run_dir: Path) -> logging.Logger:
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
     formatter = logging.Formatter("%(asctime)sZ %(levelname)s %(message)s", "%Y-%m-%dT%H:%M:%S")
+    formatter.converter = time.gmtime
     file_handler = logging.FileHandler(log_dir / "run.log", encoding="utf-8")
     file_handler.setFormatter(formatter)
     console_handler = logging.StreamHandler()
