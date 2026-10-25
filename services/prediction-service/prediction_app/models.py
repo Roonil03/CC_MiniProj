@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from statistics import mean, pstdev
+from typing import Callable
 
 
 def persistence(history: tuple[float, ...], horizons: tuple[int, ...]) -> list[float]:
@@ -107,7 +108,8 @@ def neural_network(kind: str, history_steps: int, outputs: int, hidden: int = 16
 
 def fit_neural(kind: str, train, validation, *, history_steps: int,
                horizons: tuple[int, ...], seed: int = 42, epochs: int = 20,
-               batch_size: int = 64, learning_rate: float = 0.001, hidden: int = 16):
+               batch_size: int = 64, learning_rate: float = 0.001, hidden: int = 16,
+               progress: Callable[[dict], None] | None = None):
     import copy
     import torch
 
@@ -130,6 +132,8 @@ def fit_neural(kind: str, train, validation, *, history_steps: int,
     for epoch in range(epochs):
         network.train()
         generator = torch.Generator().manual_seed(seed + epoch)
+        train_loss_total = 0.0
+        batch_count = 0
         for indices in torch.randperm(len(x_train), generator=generator).split(batch_size):
             optimizer.zero_grad()
             loss = torch.mean((network(x_train[indices]) - y_train[indices]) ** 2)
@@ -137,12 +141,23 @@ def fit_neural(kind: str, train, validation, *, history_steps: int,
                 raise ValueError("non-finite training loss")
             loss.backward()
             optimizer.step()
+            train_loss_total += float(loss.detach())
+            batch_count += 1
         network.eval()
         with torch.no_grad():
             val_loss = float(torch.mean((network(x_val) - y_val) ** 2))
         if val_loss < best_loss - 1e-8:
             best_loss, best_epoch = val_loss, epoch + 1
             best_state = copy.deepcopy(network.state_dict())
+        if progress is not None:
+            progress({
+                "epoch": epoch + 1,
+                "epochs_requested": epochs,
+                "train_loss": train_loss_total / max(1, batch_count),
+                "validation_loss": val_loss,
+                "best_validation_loss": best_loss,
+                "best_epoch": best_epoch,
+            })
         if epoch + 1 - best_epoch >= 5:
             break
     network.load_state_dict(best_state)
