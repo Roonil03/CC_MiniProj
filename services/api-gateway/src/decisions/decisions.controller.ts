@@ -141,7 +141,9 @@ function toSimulationNode(node: Record<string, any>): Record<string, unknown> {
   return {
     node_id: node.node_id,
     cpu: node.cpu !== undefined ? Number(node.cpu) : Number(node.cpu_used ?? 0) / Math.max(cpuTotal, 1e-9),
+    cpu_used: node.cpu_used !== undefined ? Number(node.cpu_used) : Number(node.cpu ?? 0) * cpuTotal,
     memory: node.memory !== undefined ? Number(node.memory) : Number(node.memory_used_mb ?? 0) / Math.max(memoryTotal, 1e-9),
+    memory_used_mb: node.memory_used_mb !== undefined ? Number(node.memory_used_mb) : Number(node.memory ?? 0) * memoryTotal,
     cpu_total: cpuTotal,
     memory_total_mb: memoryTotal,
     network_in: node.network_in ?? node.network_in_mbps ?? 0,
