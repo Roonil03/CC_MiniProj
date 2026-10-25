@@ -7,7 +7,11 @@ describe('DecisionsController safety boundary', () => {
   it('sends approval requests only to the safety service', async () => {
     const calls: unknown[][] = [];
     const request = async (...args: unknown[]) => { calls.push(args); return { approved: true }; };
-    const controller = new DecisionsController({ request } as unknown as UpstreamService);
+    const settled = async (upstream: string, path: string) => {
+      calls.push(['settled', upstream, path]);
+      return { status: 'ok' as const, data: { nodes: [] } };
+    };
+    const controller = new DecisionsController({ request, settled } as unknown as UpstreamService);
     const decision = {
       decisionId: 'decision-123',
       policyVersion: 'ppo-v1',
@@ -17,7 +21,7 @@ describe('DecisionsController safety boundary', () => {
 
     await controller.approve(decision);
 
-    assert.deepEqual(calls, [['safety', '/decisions/approve', {
+    assert.deepEqual(calls[2], ['safety', '/decisions/approve', {
       method: 'POST',
       body: JSON.stringify({
         decision_id: 'decision-123',
@@ -32,7 +36,8 @@ describe('DecisionsController safety boundary', () => {
   it('maps public decision actions to the simulation contract', async () => {
     const calls: unknown[][] = [];
     const request = async (...args: unknown[]) => { calls.push(args); return { results: [] }; };
-    const controller = new DecisionsController({ request } as unknown as UpstreamService);
+    const settled = async () => ({ status: 'ok' as const, data: { nodes: [] } });
+    const controller = new DecisionsController({ request, settled } as unknown as UpstreamService);
     await controller.simulate({
       decisionId: 'decision-123',
       policyVersion: 'ppo-v1',
@@ -40,7 +45,11 @@ describe('DecisionsController safety boundary', () => {
     });
     assert.deepEqual(calls[0], ['simulation', '/simulate', {
       method: 'POST',
-      body: JSON.stringify({ candidates: [{ type: 'RESOURCE_ADJUST', cpu_delta: 0.1 }] }),
+      body: JSON.stringify({
+        nodes: [],
+        candidates: [{ type: 'RESOURCE_ADJUST', cpu_delta: 0.1 }],
+        predicted: {},
+      }),
     }]);
   });
 });
