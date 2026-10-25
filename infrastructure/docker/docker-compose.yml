@@ -168,7 +168,11 @@ services:
     environment:
       EXPERIMENT_SERVICE_PORT: 3001
       DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
-      DATABASE_URL: postgres://dt_user:dt_password_change_me@postgres:5432/dt_ram
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: dt_ram
+      POSTGRES_USER: dt_user
+      POSTGRES_PASSWORD: dt_password_change_me
     ports:
       - "3001:3001"
     depends_on:
