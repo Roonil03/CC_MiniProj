@@ -29,6 +29,10 @@ describe('DecisionsController safety boundary', () => {
         action: { type: 'MIGRATE' },
         predicted: {},
         execution_mode: 'shadow',
+        dt_fidelity: 0,
+        destination_free_cpu: 0,
+        destination_healthy: false,
+        source_healthy: false,
       }),
     }]]);
   });

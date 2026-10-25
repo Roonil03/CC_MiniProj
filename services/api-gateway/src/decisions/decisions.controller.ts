@@ -114,9 +114,9 @@ function shortestForecast(value: unknown, action: Record<string, unknown>): Reco
 }
 
 function nodeHealthy(nodes: unknown[], nodeId: unknown): boolean {
-  if (typeof nodeId !== 'string') return true;
+  if (typeof nodeId !== 'string' || !nodeId) return false;
   const node = nodes.find((candidate) => isRecord(candidate) && candidate.node_id === nodeId);
-  return !node || String(node.health ?? 'healthy').toLowerCase() === 'healthy';
+  return isRecord(node) && String(node.health ?? 'unknown').toLowerCase() === 'healthy';
 }
 
 function destinationFreeCpu(nodes: unknown[], nodeId: unknown): number {
