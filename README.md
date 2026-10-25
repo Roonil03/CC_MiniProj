@@ -64,6 +64,11 @@ counterfactual candidates by default; PPO training is opt-in with `--train`
 and always runs in simulation. The old Jupyter notebook and notebook runtime
 are intentionally removed.
 
+For a resumable all-model prediction sweep, run
+`services/prediction-service/scripts/run_all_models.sh`. It records host and
+epoch telemetry, estimates wall time, renders plots, and creates a portable
+ZIP containing the run’s logs, JSON, plots, registries, and artifacts.
+
 Approval is currently shadow-only: the safety service publishes an
 acknowledged `dt.decisions.resource` event with `dry_run=true`, and the Go
 controller validates/audits it without mutating Kubernetes. Live actuation,

@@ -10,6 +10,7 @@ import subprocess
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Callable
 
 from .data import METRICS, SampleStore
 from .evaluation import metrics, observed_coverage, residual_radius
@@ -106,7 +107,7 @@ def _spaced(windows, minimum_seconds: int):
 def run_training(db: str, output: str, *, metric: str = "cpu", kind: str = "persistence",
                  history_steps: int = 60, horizons: tuple[int, ...] = (5, 10, 30, 60),
                  period_seconds: int = 1, seed: int = 42, epochs: int = 20,
-                 source_label: str) -> dict:
+                 source_label: str, progress: Callable[[dict], None] | None = None) -> dict:
     if metric not in METRICS or kind not in KINDS:
         raise ValueError("unsupported metric or model")
     if not source_label.strip():
@@ -145,7 +146,7 @@ def run_training(db: str, output: str, *, metric: str = "cpu", kind: str = "pers
     else:
         network, scale, fit_info = fit_neural(
             kind, parts["train"], tune, history_steps=history_steps,
-            horizons=horizons, seed=seed, epochs=epochs)
+            horizons=horizons, seed=seed, epochs=epochs, progress=progress)
         forecast = lambda history: predict_neural(network, scale, history)
 
     tune_report, _, latency_ms = _evaluate(_subsample(tune), forecast, horizons)
