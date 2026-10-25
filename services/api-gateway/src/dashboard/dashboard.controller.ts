@@ -11,9 +11,9 @@ export class DashboardController {
   @Get('summary')
   async summary() {
     const [nodes, services, twin, predictions] = await Promise.all([
-      this.upstream.settled('infrastructure', '/nodes'),
-      this.upstream.settled('infrastructure', '/services'),
-      this.upstream.settled('twin', '/state'),
+      this.upstream.settled('infrastructure', '/infrastructure/nodes'),
+      this.upstream.settled('infrastructure', '/infrastructure/pods'),
+      this.upstream.settled('twin', '/twin/state'),
       this.upstream.settled('prediction', '/predictions'),
     ]);
     return {

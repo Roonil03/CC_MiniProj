@@ -11,8 +11,11 @@ export class DecisionsController {
 
   @Post('simulate')
   simulate(@Body() decision: DecisionDto) {
-    return this.upstream.request('simulation', '/decisions/simulate', {
-      method: 'POST', body: JSON.stringify(decision),
+    return this.upstream.request('simulation', '/simulate', {
+      method: 'POST', body: JSON.stringify({
+        candidates: [toCanonicalAction(decision.action)],
+        predicted: decision.predicted,
+      }),
     });
   }
 
@@ -21,7 +24,31 @@ export class DecisionsController {
     // The gateway deliberately targets the safety service, never Kubernetes or
     // the infrastructure controller. Approved actuation remains a Go concern.
     return this.upstream.request('safety', '/decisions/approve', {
-      method: 'POST', body: JSON.stringify(decision),
+      method: 'POST', body: JSON.stringify(toCanonicalDecision(decision)),
     });
   }
+}
+
+function toCanonicalAction(action: Record<string, unknown>): Record<string, unknown> {
+  const canonical: Record<string, unknown> = { ...action };
+  const aliases: Record<string, string> = {
+    serviceId: 'service',
+    cpuDelta: 'cpu_delta',
+    memoryDelta: 'memory_delta_mb',
+  };
+  for (const [from, to] of Object.entries(aliases)) {
+    if (canonical[to] === undefined && canonical[from] !== undefined) canonical[to] = canonical[from];
+    delete canonical[from];
+  }
+  return canonical;
+}
+
+function toCanonicalDecision(decision: ApproveDecisionDto): Record<string, unknown> {
+  return {
+    decision_id: decision.decisionId,
+    policy_version: decision.policyVersion,
+    action: toCanonicalAction(decision.action),
+    predicted: decision.predicted ?? {},
+    execution_mode: decision.executionMode,
+  };
 }

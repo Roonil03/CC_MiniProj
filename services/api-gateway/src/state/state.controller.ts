@@ -10,17 +10,17 @@ export class StateController {
 
   @Get('nodes')
   nodes() {
-    return this.upstream.request('infrastructure', '/nodes');
+    return this.upstream.request('infrastructure', '/infrastructure/nodes');
   }
 
   @Get('services')
   services() {
-    return this.upstream.request('infrastructure', '/services');
+    return this.upstream.request('infrastructure', '/infrastructure/pods');
   }
 
   @Get('twin/state')
   twinState() {
-    return this.upstream.request('twin', '/state');
+    return this.upstream.request('twin', '/twin/state');
   }
 
   @Get('predictions')
