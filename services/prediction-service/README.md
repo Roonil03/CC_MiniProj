@@ -44,6 +44,36 @@ records outside Git when conducting research.
 
 ## Train and compare
 
+### Reproducible all-model sweep
+
+The resumable runner records every phase and host/process sample in
+`events.jsonl` and `timeline.json`, writes each model result and runtime
+estimate as JSON, captures neural train/validation loss for every epoch, and
+renders runtime, forecast metrics, latency, artifact-size, system-telemetry,
+and epoch-loss plots. It packages the complete run directory into a ZIP after
+success or failure.
+
+From this service directory:
+
+```text
+bash scripts/run_all_models.sh
+```
+
+The default sweep runs all seven model kinds for CPU. Set
+`ALL_METRICS=1` to run CPU, memory, network-in, and network-out, or set
+`PREDICTION_MODELS`, `PREDICTION_METRICS`, `PREDICTION_DB`, `RUN_DIR`, and
+`EPOCHS` explicitly. Each model has its own checkpoint directory, so a
+stopped process resumes from the last completed model/epoch state; repeated
+invocations are safe. A failed model is retained in the archive with its
+traceback and can be retried by rerunning the same command.
+
+The runner estimates total and remaining wall time using completed jobs when
+available and conservative per-model heuristics otherwise. The estimate is
+stored in `runtime_estimate.json`; actual durations are plotted beside it.
+The run is offline and requires a recorded telemetry SQLite database. Use
+`PYTHON=/path/to/python bash scripts/run_all_models.sh` when `python3` is not
+on PATH.
+
 Run the same command for `persistence`, `arima`, `ets`, `lstm`, `gru`,
 `temporal` (compact convolution), and `transformer` (one small self-attention
 encoder), and for each available metric (`cpu`, `memory`, `network_in`,
