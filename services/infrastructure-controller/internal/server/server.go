@@ -10,6 +10,7 @@ import (
 	"dt-ram/infrastructure-controller/internal/discovery"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"dt-ram/infrastructure-controller/internal/audit"
@@ -39,6 +40,14 @@ func Router(d Deps) *gin.Engine {
 	}
 	r := gin.New()
 	r.Use(gin.Recovery())
+	serviceToken := os.Getenv("DT_RAM_SERVICE_TOKEN")
+	r.Use(func(c *gin.Context) {
+		if serviceToken != "" && c.Request.URL.Path != "/healthz" && c.Request.URL.Path != "/readyz" && c.Request.URL.Path != "/metrics" && c.GetHeader("x-service-token") != serviceToken {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		c.Next()
+	})
 	r.GET("/metrics", func(c *gin.Context) {
 		records := d.Audit.List()
 		rejected := 0
@@ -79,6 +88,9 @@ func Router(d Deps) *gin.Engine {
 	})
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "infrastructure-controller", "executor": d.Executor.Name()})
+	})
+	r.GET("/readyz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "infrastructure-controller"})
 	})
 	r.GET("/actions", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"actions": d.Audit.List()})

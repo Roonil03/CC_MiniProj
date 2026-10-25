@@ -45,13 +45,34 @@ go vet ./...
 go test ./...
 ```
 
-From the repository root, validate or start the local infrastructure stack:
+From the repository root, validate the complete local integration stack:
 
 ```text
 docker compose -f infrastructure/docker/docker-compose.yml config
-docker compose -f infrastructure/docker/docker-compose.yml up --build
+docker compose -f infrastructure/docker/docker-compose.yml build
 ```
 
-Live controller actuation remains disabled until authoritative twin, counterfactual and safety-service integration is available. Migration, placement/rollback and `RESOURCE_ADJUST` are not implemented. Audit records remain process-local; TimescaleDB has bootstrap DDL but no historical event sink. Docker image builds and real-cluster deployment still require validation.
+The stack includes the Member 1 gateway/experiment services, Member 2 Go
+telemetry/twin/controller services, Member 3 prediction API and collector, and
+Member 4 simulation/safety services. Set `DT_RAM_API_KEY` and
+`DT_RAM_SERVICE_TOKEN` in `.env`; the gateway sends canonical internal
+contracts and never receives Kubernetes credentials.
+
+Member 4’s reproducible CLI is available at
+`services/rl-service/cli.py`. It evaluates the synthetic twin and
+counterfactual candidates by default; PPO training is opt-in with `--train`
+and always runs in simulation. The old Jupyter notebook and notebook runtime
+are intentionally removed.
+
+For a resumable all-model prediction sweep, run
+`services/prediction-service/scripts/run_all_models.sh`. It records host and
+epoch telemetry, estimates wall time, renders plots, and creates a portable
+ZIP containing the run’s logs, JSON, plots, registries, and artifacts.
+
+Approval is currently shadow-only: the safety service publishes an
+acknowledged `dt.decisions.resource` event with `dry_run=true`, and the Go
+controller validates/audits it without mutating Kubernetes. Live actuation,
+rollback, a Timescale event sink, and production model artifacts remain
+explicitly disabled or pending.
 
 See [the infrastructure guide](infrastructure/README.md) for deployment and configuration details, and [the Member 2 work log](member2.txt) for completed tasks, verification evidence and the integration handoff.

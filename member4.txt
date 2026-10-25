@@ -1,5 +1,5 @@
 ================================================================================
-MEMBER-4 LOG — Python Digital Twin, Simulator & RL Engine (+ Notebook)
+MEMBER-4 LOG — Python Digital Twin, Simulator & RL Engine (+ CLI)
 Branch: member4 (offshoot of member2) | Date: 2026-10-05
 Owner scope per CODEOWNERS: rl-service, simulation-service, safety-service
 (shared with Member-2), experiments (shared with Member-3)
@@ -10,15 +10,15 @@ Owner scope per CODEOWNERS: rl-service, simulation-service, safety-service
 - services/simulation-service/app/  (twin.py, simulator.py, safety.py,
                                       schemas.py, main.py + __init__.py)
 - services/rl-service/rl_app/        (env.py, ppo.py, policies.py)
-- services/rl-service/notebooks/member4_dt_sim_rl.ipynb (THE notebook)
-- services/rl-service/requirements.txt (added jupyterlab/ipykernel/matplotlib)
+- services/rl-service/cli.py (reproducible DT/simulation/RL workflow)
+- services/rl-service/requirements.txt (simulation/PPO runtime only)
 - services/rl-service/Dockerfile, services/simulation-service/Dockerfile,
   services/safety-service/Dockerfile (all rewritten: venv + server)
 - services/safety-service/safety_app/ (FastAPI gate; renamed from app/ to
   avoid an `app` package collision with simulation-service)
 - services/*/tests/                  (26 hermetic unit tests)
-- infrastructure/docker/docker-compose.member4.yml (overlay, member2 stack
-  untouched)
+- the former infrastructure/docker/docker-compose.member4.yml overlay (removed
+  after integration into the shared stack)
 - member4.txt (this file)
 - NOT touched: member2 Go services, infrastructure/* (except the new
   overlay file), api-gateway, experiment-service (M1), prediction-service,
@@ -36,7 +36,8 @@ Owner scope per CODEOWNERS: rl-service, simulation-service, safety-service
   lr 3e-4). Single-agent PPO baseline only; no MARL, no LLM in the loop.
 - Safety gates Sec 33-36 + fallback Sec 64, fail-closed; boundary Sec 66
   (no `kubernetes` import in any Python file — verified by inspection).
-- Ports per .env.example: RL 5001, simulation 5002, safety 5003, notebook 8888.
+- Ports per .env.example: simulation 5002 and safety 5003; the RL CLI writes
+  experiment output rather than serving a notebook port.
 - Registry metadata Sec 56-57 (model_id, version, dataset, hyperparams,
   metrics, git SHA, artifact hash) in rl_app/policies.py.
 
@@ -55,23 +56,18 @@ Owner scope per CODEOWNERS: rl-service, simulation-service, safety-service
 - rl_app/ppo.py: SB3 PPO make_model (lazy import) + deterministic rollout().
 - rl_app/policies.py: policy_record + git_sha.
 - safety_app/main.py: FastAPI /healthz + /validate reusing simulation gate.
-- NOTEBOOK services/rl-service/notebooks/member4_dt_sim_rl.ipynb (15 cells:
-  7 markdown + 8 code, outputs cleared): setup/seed -> twin/staleness/
-  fidelity demo -> counterfactual table -> MDP describe + seeded random
-  rollout -> PPO learn(2048)+eval (small; full training stays on experiment
-  branches) -> safety gate table -> §54 RESOURCE_DECISION emit (or correct
-  fail-closed "emit nothing") -> reproducibility footer (SHA/seed/config).
+- CLI services/rl-service/cli.py: seeded twin/staleness/fidelity and
+  counterfactual evaluation, explicit safety decisions, and JSON provenance.
+  PPO training is opt-in with `--train`; the default path never trains or
+  actuates.
 - Dockerfiles: python:3.11-slim, `python -m venv /opt/venv` first on PATH,
-  pip install requirements, ipykernel registration (rl), CMD jupyter lab
-  (rl-notebook :8888) / uvicorn (simulation :5002, safety :5003).
-- Compose overlay with resource limits; notebook + simulation bind-mounted
-  for live editing; simulation mounted read-only into rl/safety images.
+  pip install requirements, and CLI/uvicorn entrypoints. The integrated
+  Compose stack packages shared simulation code explicitly for safety and RL.
 
-4. VERIFICATION (actually run — notebook itself NEVER executed, as ordered)
+4. VERIFICATION (actually run — no notebook runtime)
 --------------------------------------------------------------------------------
-- Notebook static check: valid nbformat-4 JSON, 15 cells / 8 code cells,
-  every code cell outputs=[] and execution_count=null. No kernel ever
-  started on it; no .ipynb_checkpoints committed.
+- CLI static/import checks cover the default no-training workflow; no notebook
+  or Jupyter kernel is part of the integration.
 - py_compile: all 9 new .py files OK (isolated /tmp/m4venv).
 - unittest: 26/26 PASS —
   simulation-service 17 (twin sync/stale/range/fidelity/autonomy; sim
@@ -80,8 +76,8 @@ Owner scope per CODEOWNERS: rl-service, simulation-service, safety-service
   rl-service 6 (env determinism/step/invalid/describe; policy schema/sha),
   safety-service 3 (healthz/approve/reject). PPO model construction (torch/
   SB3) intentionally not exercised here; env/policy layers cover the MDP.
-- Compose overlay: YAML parses, services = rl-notebook, simulation-service,
-  safety-service.
+- Unified Compose: YAML includes gateway, Go services, prediction collector/API,
+  simulation, safety, and an opt-in `experiments` profile for the CLI.
 - No __pycache__/*.pyc committed; no secrets; no K8s mutation (no cluster
   client exists in Python).
 
@@ -102,12 +98,13 @@ Owner scope per CODEOWNERS: rl-service, simulation-service, safety-service
 
 6. KNOWN LIMITATIONS / NEXT STEPS
 --------------------------------------------------------------------------------
-- Notebook is generated code only — first execution should happen in the
-  venv container (rl-notebook, :8888) with torch/SB3 installed.
+- The CLI default is a smoke/evaluation path; full PPO training remains an
+  explicit experiment action with provenance.
 - Full PPO training + experiment provenance (Sec 57) belongs on
   experiment/* branches with dataset/version/seed records.
-- HTTP call-through from Go controller to safety-service /validate is
-  stubbed server-side here; wiring is Member-2+4 joint work.
+- Safety approval is now a shadow-only FastAPI endpoint that publishes the
+  acknowledged `dt.decisions.resource` event; Go remains the sole actuation
+  boundary and consumes it in dry-run mode.
 - `docker build`/`compose up` must run where Docker access exists (same
   environment limitation as member2).
 ================================================================================

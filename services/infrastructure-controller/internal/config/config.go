@@ -36,7 +36,7 @@ func Default() Config {
 		NodeCooldown:            30 * time.Second,
 		MinPredictionConfidence: 0.80,
 		MaxSLOProb:              0.10,
-		MinFidelity:             0.80,
+		MinFidelity:             0.95,
 		DryRun:                  envBoolOr("CONTROLLER_DRY_RUN", true),
 	}
 }
