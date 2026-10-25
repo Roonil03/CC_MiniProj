@@ -9,16 +9,18 @@ docker compose -f infrastructure/docker/docker-compose.yml config
 docker compose -f infrastructure/docker/docker-compose.yml up --build
 ```
 
-Services and ports (see `.env.example`): telemetry-agent `8082`,
-twin-manager `8080`, infrastructure-controller `8081`, NATS `4222/8222`,
-Redis `6379`, Postgres/Timescale `5432`, Prometheus `9090`.
+Services and ports (see `.env.example`): API gateway `3000`, experiment service
+`3001`, telemetry-agent `8082`, twin-manager `8080`,
+infrastructure-controller `8081`, prediction `5000`, simulation `5002`, safety
+`5003`, NATS `4222/8222`, Redis `6379`, Postgres/Timescale `5432`, and
+Prometheus `9090`.
 
-Controller ships with `CONTROLLER_DRY_RUN=true`. Live requests are rejected
-with 503 even when this flag is false: authoritative twin freshness,
-counterfactual evaluation and the Member 4 safety-service contract are pending.
-Caller-supplied fidelity and health fields are sufficient only for dry-run
-validation. Fidelity must exceed 0.95 and prediction confidence must be at
-least 0.80; missing confidence is rejected. RESOURCE_ADJUST is unsupported.
+Controller ships with `CONTROLLER_DRY_RUN=true`. The integrated safety service
+publishes only shadow decisions (`dry_run=true`) and the controller consumes
+them for validation and audit. Physical live requests remain rejected until
+rollback, placement verification, and authoritative actuation are implemented.
+Fidelity must exceed 0.95 and prediction confidence must be at least 0.80;
+missing or non-finite confidence is rejected.
 
 HTTP and NATS decisions share the same audit pipeline. `decision_id` is required
 for execution requests; reused IDs return 409 over HTTP. Audit is in memory.
@@ -34,9 +36,8 @@ upstream Kubernetes errors return 502. Node status, allocatable resources,
 pod placement and resource requests are available in these native objects.
 
 The low-level SCALE executor is tested with fake Kubernetes. MIGRATE and PLACE
-return errors: the previous Deployment annotation did not actually move pods.
-Rollout verification, reversible placement, capacity checks and authenticated
-live actuation remain dependent on the integrated control loop.
+remain propose-only: rollout verification, reversible placement, capacity
+checks, and authenticated live actuation are not enabled by the integration.
 
 ## Kubernetes (k3d)
 
@@ -67,6 +68,10 @@ The k3d labels use the documented `options.k3s.nodeLabels` and `nodeFilters`
 structure: [k3d config reference](https://k3d.io/v5.6.0/usage/configfile/).
 
 Compose waits for NATS/Redis health and persists JetStream under nats-data.
+The prediction collector shares its SQLite volume with the read-only
+prediction API; model artifacts are mounted separately. The RL service is
+available only under the `experiments` profile and runs the reproducible CLI,
+not Jupyter.
 The Helm directory remains a values/chart scaffold, without install templates.
 For cluster-free manifest regression checks, run `go test ./...` in infrastructure.
 

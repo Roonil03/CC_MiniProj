@@ -16,7 +16,7 @@ subjects:
     status: planned
   - name: dt.decisions.resource
     event: RESOURCE_DECISION
-    publisher: rl-service
+    publisher: safety-service
     subscriber: infrastructure-controller
     status: implemented
     stream: DT_DECISIONS

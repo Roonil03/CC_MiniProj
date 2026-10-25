@@ -22,10 +22,21 @@ The gateway communicates with internal services using `DT_RAM_SERVICE_TOKEN`. Do
 | `GET` | `/models` | Query model metadata | Prediction service |
 | `GET` | `/policies` | Query safety policies | Safety service |
 | `POST` | `/decisions/simulate` | Counterfactually evaluate a candidate | Simulation service |
-| `POST` | `/decisions/approve` | Request safety approval | Safety service |
+| `POST` | `/decisions/approve` | Counterfactual-backed shadow approval | Safety service → NATS → Go controller |
 | `GET` | `/dashboard/summary` | Aggregate read-only dashboard state | Multiple read-only services |
 
-`POST /decisions/approve` never calls Kubernetes or the infrastructure controller. The safety service must approve the decision before an internal event or controlled Go API can actuate it.
+`POST /decisions/approve` first obtains the current twin and shortest available
+forecast through the gateway, evaluates the canonical action in the
+simulation service, and sends the simulation-derived prediction, health,
+capacity, and fidelity context to the safety service. Client-supplied
+prediction and health values are not trusted as authoritative inputs.
+
+Only `executionMode: "shadow"` is available. An approved request is published
+to `dt.decisions.resource` with `dry_run: true` and acknowledged by the
+JetStream publisher. The Go infrastructure controller consumes and audits the
+event, but physical Kubernetes actuation and rollback remain disabled.
+`canary` and `controlled` modes return a fail-closed error until those
+capabilities are implemented.
 
 ## Experiment provenance
 
@@ -53,4 +64,7 @@ Example:
 
 ## Event schemas
 
-NATS JetStream remains the asynchronous transport for telemetry, state updates, predictions, decisions, audit logs, and approved actuation events. The Node services do not publish an actuation event until the simulation and safety components define and implement that contract. See [Design.md](../Design.md) Sections 52–54.
+NATS JetStream remains the asynchronous transport for telemetry, predictions,
+decisions, and audit/logging contracts. The safety service owns publication of
+approved shadow decisions; the Node gateway never publishes or executes an
+actuation event. See [Design.md](../Design.md) Sections 52–54.
