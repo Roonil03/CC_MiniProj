@@ -116,7 +116,7 @@ function shortestForecast(value: unknown, action: Record<string, unknown>): Reco
 function nodeHealthy(nodes: unknown[], nodeId: unknown): boolean {
   if (typeof nodeId !== 'string' || !nodeId) return false;
   const node = nodes.find((candidate) => isRecord(candidate) && candidate.node_id === nodeId);
-  return isRecord(node) && String(node.health ?? 'unknown').toLowerCase() === 'healthy';
+  return isRecord(node) && node.stale === false && String(node.health ?? 'unknown').toLowerCase() === 'healthy';
 }
 
 function destinationFreeCpu(nodes: unknown[], nodeId: unknown): number {
@@ -130,7 +130,7 @@ function destinationFreeCpu(nodes: unknown[], nodeId: unknown): number {
 function twinFidelity(nodes: unknown[]): number {
   const values = nodes
     .filter(isRecord)
-    .map((node) => Number(node.fidelity))
+    .map((node) => node.stale === false ? Number(node.fidelity) : 0)
     .filter((value) => Number.isFinite(value));
   return values.length ? Math.min(...values) : 0;
 }
