@@ -19,7 +19,7 @@ export class DecisionsController {
   async approve(@Body() decision: ApproveDecisionDto) {
     // The gateway deliberately targets the safety service, never Kubernetes or
     // the infrastructure controller. Approved actuation remains a Go concern.
-    const context = await this.context(decision);
+    const context = await this.context(decision, true);
     return this.upstream.request('safety', '/decisions/approve', {
       method: 'POST', body: JSON.stringify({
         ...toCanonicalDecision(decision),
@@ -28,7 +28,7 @@ export class DecisionsController {
     });
   }
 
-  private async context(decision: DecisionDto) {
+  private async context(decision: DecisionDto, approval = false) {
     const [twin, predictions] = await Promise.all([
       this.upstream.settled('twin', '/twin/state'),
       this.upstream.settled('prediction', '/predictions'),
@@ -40,7 +40,7 @@ export class DecisionsController {
     const simulationRequest = {
         nodes,
         candidates: [action],
-        predicted: forecast ?? decision.predicted ?? {},
+        predicted: forecast ?? (approval ? {} : decision.predicted ?? {}),
         dt_fidelity: twinFidelity(nodes),
     };
     const simulationResult = await this.upstream.request<Record<string, any>>('simulation', '/simulate', {
@@ -53,7 +53,7 @@ export class DecisionsController {
       latency: simulated.predicted_latency_ms,
       slo_violation_probability: simulated.slo_violation_prob,
       prediction_confidence: simulated.prediction_confidence ?? 0,
-    } : (forecast ?? decision.predicted ?? {});
+    } : (forecast ?? (approval ? {} : decision.predicted ?? {}));
     return {
       simulationRequest,
       simulationResult,
@@ -148,7 +148,7 @@ function toSimulationNode(node: Record<string, any>): Record<string, unknown> {
     memory_total_mb: memoryTotal,
     network_in: node.network_in ?? node.network_in_mbps ?? 0,
     network_out: node.network_out ?? node.network_out_mbps ?? 0,
-    health: node.health ?? 'healthy',
+    health: node.stale ? 'unknown' : node.health ?? 'unknown',
     fidelity: node.fidelity,
   };
 }
