@@ -1,5 +1,5 @@
 MEMBER 3 WORK LOG - Python forecasting and data engineering
-Branch: feature/member3-prediction | Updated: 2026-10-13
+Branch: feature/forecasting-evaluation | Updated: 2026-11-01
 
 Ownership and boundary
 - Owns services/prediction-service and datasets; prediction experiment and
@@ -36,7 +36,7 @@ Deliverables against Design.md sections 72-73
    deployment.
 
 Verification on this checkout
-- All 14 Member 3 unit/smoke tests pass, including the Transformer shape,
+- All 15 Member 3 unit/smoke tests pass, including the Transformer shape,
   training/artifact reload, registry activation, and existing data/API checks.
 - Python compilation, pip dependency check, and Git whitespace/diff checks
   pass. No datasets, weights, credentials, or virtual environments are tracked.
@@ -49,15 +49,21 @@ Verification on this checkout
   limit, and local hardware do not establish real forecasting accuracy or the
   design's production <100 ms prediction target.
 
-Remaining Member 3 validation when shared infrastructure/data is available
-- Record the project's own testbed telemetry through the existing collector;
-  export and preserve its manifest, topology, workload/fault schedule, and data
-  version. Obtain a verified application telemetry contract before extending
-  targets beyond node CPU/memory/network.
-- Train and compare the baselines, LSTM, GRU, temporal model, and Transformer
-  on the same real dataset, chronological partitions, and forecast horizons.
-  Review accuracy, interval coverage, model size, and measured cost before
-  activating a model. Do not report synthetic fixture scores as research results.
+Real-data evaluation completed 2026-11-01
+- Compared persistence, ARIMA, ETS, LSTM, GRU, temporal convolution, and
+  Transformer on the checksummed 5,004-sample k3d CPU trace with chronological
+  partitions and 5/10/30/60-second horizons. The 60-sample history had no valid
+  windows because of capture gaps; a declared 20-sample history was used without
+  imputation. Results, metadata, plots, and limitations are versioned under
+  experiments/analysis/k3d-20261101-forecasting.
+- Temporal convolution was selected on validation RMSE and met the local-host
+  latency budget, but low interval coverage and idle/shared-host data mean no
+  model is approved for activation. Synthetic smoke results remain software
+  checks only.
+
+Remaining Member 3 validation
+- Collect a longer workload- and fault-labeled trace and obtain a verified
+  application telemetry contract before extending targets beyond node metrics.
 - Run the live-network benchmark on the intended hardware with fresh telemetry;
   separately measure server CPU/RSS and record whether the <100 ms target is met.
 - Build/run the Docker image and test the collector against live JetStream when
