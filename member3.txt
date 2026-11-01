@@ -1,5 +1,5 @@
 MEMBER 3 WORK LOG - Python forecasting and data engineering
-Branch: feature/forecasting-evaluation | Updated: 2026-11-01
+Branch: feature/forecasting-evaluation | Updated: 2026-11-02
 
 Ownership and boundary
 - Owns services/prediction-service and datasets; prediction experiment and
@@ -21,9 +21,9 @@ Deliverables against Design.md sections 72-73
 3. Baselines: persistence, ARIMA, and ETS implemented and smoke-tested.
 4. Recurrent models: LSTM and GRU training/evaluation implemented and tested.
 5. Lightweight models: compact temporal convolution and a one-layer Transformer
-   encoder (2,418 parameters) implemented, trained, saved, reloaded, and
-   evaluated on a labeled synthetic software fixture. Real workload comparison
-   remains pending.
+   encoder (2,644 parameters) implemented, trained, saved, reloaded, and
+   evaluated on a labeled synthetic software fixture and the verified idle k3d
+   handoff trace. Synthetic results remain software checks only.
 6. Prediction service: versioned model registry, explicit activation, artifact
    hash verification, read-only /models and /predictions, freshness and token
    checks, Dockerfile, and service guide. The Transformer was served through a
@@ -32,11 +32,12 @@ Deliverables against Design.md sections 72-73
 7. Operational benchmark: direct inference, in-process HTTP, and optional
    live-network HTTP measurement with selected-model verification, latency
    summary, client CPU/RSS, model size, host, and dataset identity. The actual
-   target-hardware/testbed benchmark is pending a real recorded dataset and
-   deployment.
+   k3d-host benchmark is complete; independent physical edge hardware and a
+   live-network deployment remain pending.
 
 Verification on this checkout
-- All 15 Member 3 unit/smoke tests pass, including the Transformer shape,
+- All 16 Member 3 unit/smoke tests pass in the evaluation environment, including
+  the Transformer shape,
   training/artifact reload, registry activation, and existing data/API checks.
 - Python compilation, pip dependency check, and Git whitespace/diff checks
   pass. No datasets, weights, credentials, or virtual environments are tracked.
@@ -57,7 +58,8 @@ Real-data evaluation completed 2026-11-01
   imputation. Results, metadata, plots, and limitations are versioned under
   experiments/analysis/k3d-20261101-forecasting.
 - Temporal convolution was selected on validation RMSE and met the local-host
-  latency budget, but low interval coverage and idle/shared-host data mean no
+  latency budget, but interval coverage is unavailable from only three
+  correlated per-node calibration residuals. Idle/shared-host data mean no
   model is approved for activation. Synthetic smoke results remain software
   checks only.
 

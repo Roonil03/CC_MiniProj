@@ -1,7 +1,7 @@
 [
   {
-    "model_id": "persistence-cpu-3efbd683895e1642",
-    "version": "3efbd683895e1642",
+    "model_id": "persistence-cpu-2ba23ca607da97d4",
+    "version": "2ba23ca607da97d4",
     "kind": "persistence",
     "metric": "cpu",
     "training_dataset": "cde8f08f400bf3dac700c3ec679638cb3259c665baa5f3f8ce3784dd6a6ca7ee",
@@ -16,7 +16,7 @@
       "first": "2026-11-01T12:20:47.963363+00:00",
       "last": "2026-11-01T12:51:04.793916+00:00"
     },
-    "training_timestamp": "2026-11-01T18:15:40.770044+00:00",
+    "training_timestamp": "2026-11-01T18:23:27.834020+00:00",
     "hyperparameters": {
       "metric": "cpu",
       "kind": "persistence",
@@ -108,8 +108,8 @@
       }
     },
     "inference_latency_ms": {
-      "validation_mean": 0.00037083373172208667,
-      "test_mean": 0.0002640617822180502
+      "validation_mean": 0.00037916712850953144,
+      "test_mean": 0.0002859369487850927
     },
     "calibration": {
       "5": {
@@ -166,12 +166,12 @@
     "weights_file": null,
     "artifact_hash": null,
     "scale": null,
-    "git_commit": "38b319ae20a0f1615031e05fd01d5c459279c7a8",
-    "working_tree_dirty": true
+    "git_commit": "bb4764672d08d6d9d82a5d785be058cda4c467a6",
+    "working_tree_dirty": false
   },
   {
-    "model_id": "arima-cpu-eb8b592bc858a333",
-    "version": "eb8b592bc858a333",
+    "model_id": "arima-cpu-3a8059ce1e2d525a",
+    "version": "3a8059ce1e2d525a",
     "kind": "arima",
     "metric": "cpu",
     "training_dataset": "cde8f08f400bf3dac700c3ec679638cb3259c665baa5f3f8ce3784dd6a6ca7ee",
@@ -186,7 +186,7 @@
       "first": "2026-11-01T12:20:47.963363+00:00",
       "last": "2026-11-01T12:51:04.793916+00:00"
     },
-    "training_timestamp": "2026-11-01T18:15:43.373211+00:00",
+    "training_timestamp": "2026-11-01T18:23:30.576826+00:00",
     "hyperparameters": {
       "metric": "cpu",
       "kind": "arima",
@@ -278,8 +278,8 @@
       }
     },
     "inference_latency_ms": {
-      "validation_mean": 29.506147916739184,
-      "test_mean": 13.23934687570727
+      "validation_mean": 31.535062499945827,
+      "test_mean": 13.64917812497879
     },
     "calibration": {
       "5": {
@@ -336,12 +336,12 @@
     "weights_file": null,
     "artifact_hash": null,
     "scale": null,
-    "git_commit": "38b319ae20a0f1615031e05fd01d5c459279c7a8",
-    "working_tree_dirty": true
+    "git_commit": "bb4764672d08d6d9d82a5d785be058cda4c467a6",
+    "working_tree_dirty": false
   },
   {
-    "model_id": "ets-cpu-22cf79c6e5af2dd5",
-    "version": "22cf79c6e5af2dd5",
+    "model_id": "ets-cpu-9e51b352887946fb",
+    "version": "9e51b352887946fb",
     "kind": "ets",
     "metric": "cpu",
     "training_dataset": "cde8f08f400bf3dac700c3ec679638cb3259c665baa5f3f8ce3784dd6a6ca7ee",
@@ -356,7 +356,7 @@
       "first": "2026-11-01T12:20:47.963363+00:00",
       "last": "2026-11-01T12:51:04.793916+00:00"
     },
-    "training_timestamp": "2026-11-01T18:15:43.831700+00:00",
+    "training_timestamp": "2026-11-01T18:23:31.071825+00:00",
     "hyperparameters": {
       "metric": "cpu",
       "kind": "ets",
@@ -448,8 +448,8 @@
       }
     },
     "inference_latency_ms": {
-      "validation_mean": 2.287429166851022,
-      "test_mean": 2.115515624609543
+      "validation_mean": 2.4824729165023505,
+      "test_mean": 2.3645656256121583
     },
     "calibration": {
       "5": {
@@ -506,12 +506,12 @@
     "weights_file": null,
     "artifact_hash": null,
     "scale": null,
-    "git_commit": "38b319ae20a0f1615031e05fd01d5c459279c7a8",
-    "working_tree_dirty": true
+    "git_commit": "bb4764672d08d6d9d82a5d785be058cda4c467a6",
+    "working_tree_dirty": false
   },
   {
-    "model_id": "lstm-cpu-f6e2aeb392e8b85f",
-    "version": "f6e2aeb392e8b85f",
+    "model_id": "lstm-cpu-65736bf4a62f06fc",
+    "version": "65736bf4a62f06fc",
     "kind": "lstm",
     "metric": "cpu",
     "training_dataset": "cde8f08f400bf3dac700c3ec679638cb3259c665baa5f3f8ce3784dd6a6ca7ee",
@@ -526,7 +526,7 @@
       "first": "2026-11-01T12:20:47.963363+00:00",
       "last": "2026-11-01T12:51:04.793916+00:00"
     },
-    "training_timestamp": "2026-11-01T18:15:45.403771+00:00",
+    "training_timestamp": "2026-11-01T18:23:32.939170+00:00",
     "hyperparameters": {
       "metric": "cpu",
       "kind": "lstm",
@@ -622,8 +622,8 @@
       }
     },
     "inference_latency_ms": {
-      "validation_mean": 0.18363541676080786,
-      "test_mean": 0.15737812464067247
+      "validation_mean": 0.16529583323669308,
+      "test_mean": 0.15595468721585348
     },
     "calibration": {
       "5": {
@@ -677,18 +677,18 @@
         "status": "uncalibrated"
       }
     },
-    "weights_file": "lstm-cpu-f6e2aeb392e8b85f.pt",
-    "artifact_hash": "0ce3ba7f9f62124c37267a3b2b842f43fdbe874f81a4e7a61c5d21f6b972c486",
+    "weights_file": "lstm-cpu-65736bf4a62f06fc.pt",
+    "artifact_hash": "f4c2fb3163f11d8a3002570c2a901be7adcca61abcd2e70bf4fb08187d64045a",
     "scale": {
       "center": 0.02936693627575579,
       "spread": 0.018959803272758556
     },
-    "git_commit": "38b319ae20a0f1615031e05fd01d5c459279c7a8",
-    "working_tree_dirty": true
+    "git_commit": "bb4764672d08d6d9d82a5d785be058cda4c467a6",
+    "working_tree_dirty": false
   },
   {
-    "model_id": "gru-cpu-b1f35f0e9dca354b",
-    "version": "b1f35f0e9dca354b",
+    "model_id": "gru-cpu-89887862a29082dc",
+    "version": "89887862a29082dc",
     "kind": "gru",
     "metric": "cpu",
     "training_dataset": "cde8f08f400bf3dac700c3ec679638cb3259c665baa5f3f8ce3784dd6a6ca7ee",
@@ -703,7 +703,7 @@
       "first": "2026-11-01T12:20:47.963363+00:00",
       "last": "2026-11-01T12:51:04.793916+00:00"
     },
-    "training_timestamp": "2026-11-01T18:15:46.257423+00:00",
+    "training_timestamp": "2026-11-01T18:23:33.944765+00:00",
     "hyperparameters": {
       "metric": "cpu",
       "kind": "gru",
@@ -799,8 +799,8 @@
       }
     },
     "inference_latency_ms": {
-      "validation_mean": 0.39979166588940035,
-      "test_mean": 0.37175468696659664
+      "validation_mean": 0.3925645833078306,
+      "test_mean": 0.41260937450715574
     },
     "calibration": {
       "5": {
@@ -854,18 +854,18 @@
         "status": "uncalibrated"
       }
     },
-    "weights_file": "gru-cpu-b1f35f0e9dca354b.pt",
-    "artifact_hash": "a3518759ffb61e80f768f154549c58f26de8ef916741db972822c009922eb529",
+    "weights_file": "gru-cpu-89887862a29082dc.pt",
+    "artifact_hash": "82a8ae5447e2b407a9fcf22966175c055720986c84c6108aaac5324f7f47df80",
     "scale": {
       "center": 0.02936693627575579,
       "spread": 0.018959803272758556
     },
-    "git_commit": "38b319ae20a0f1615031e05fd01d5c459279c7a8",
-    "working_tree_dirty": true
+    "git_commit": "bb4764672d08d6d9d82a5d785be058cda4c467a6",
+    "working_tree_dirty": false
   },
   {
-    "model_id": "temporal-cpu-bbb95aaad86c7bbf",
-    "version": "bbb95aaad86c7bbf",
+    "model_id": "temporal-cpu-dc48396b50b5bfc4",
+    "version": "dc48396b50b5bfc4",
     "kind": "temporal",
     "metric": "cpu",
     "training_dataset": "cde8f08f400bf3dac700c3ec679638cb3259c665baa5f3f8ce3784dd6a6ca7ee",
@@ -880,7 +880,7 @@
       "first": "2026-11-01T12:20:47.963363+00:00",
       "last": "2026-11-01T12:51:04.793916+00:00"
     },
-    "training_timestamp": "2026-11-01T18:15:46.675105+00:00",
+    "training_timestamp": "2026-11-01T18:23:34.365760+00:00",
     "hyperparameters": {
       "metric": "cpu",
       "kind": "temporal",
@@ -976,8 +976,8 @@
       }
     },
     "inference_latency_ms": {
-      "validation_mean": 0.08214375096334454,
-      "test_mean": 0.06364687487803167
+      "validation_mean": 0.06612083355624539,
+      "test_mean": 0.06905468762852252
     },
     "calibration": {
       "5": {
@@ -1031,18 +1031,18 @@
         "status": "uncalibrated"
       }
     },
-    "weights_file": "temporal-cpu-bbb95aaad86c7bbf.pt",
-    "artifact_hash": "9b99d7da686997c7e5042524faa4c4b588d72c07f98be03769d07c8a4eb551b6",
+    "weights_file": "temporal-cpu-dc48396b50b5bfc4.pt",
+    "artifact_hash": "da262618438f7915edfce6220af7f08e79aba8a402523c176d9aba7b9b69857f",
     "scale": {
       "center": 0.02936693627575579,
       "spread": 0.018959803272758556
     },
-    "git_commit": "38b319ae20a0f1615031e05fd01d5c459279c7a8",
-    "working_tree_dirty": true
+    "git_commit": "bb4764672d08d6d9d82a5d785be058cda4c467a6",
+    "working_tree_dirty": false
   },
   {
-    "model_id": "transformer-cpu-364d018869430e27",
-    "version": "364d018869430e27",
+    "model_id": "transformer-cpu-0054db8102ae064d",
+    "version": "0054db8102ae064d",
     "kind": "transformer",
     "metric": "cpu",
     "training_dataset": "cde8f08f400bf3dac700c3ec679638cb3259c665baa5f3f8ce3784dd6a6ca7ee",
@@ -1057,7 +1057,7 @@
       "first": "2026-11-01T12:20:47.963363+00:00",
       "last": "2026-11-01T12:51:04.793916+00:00"
     },
-    "training_timestamp": "2026-11-01T18:15:47.628708+00:00",
+    "training_timestamp": "2026-11-01T18:23:35.340467+00:00",
     "hyperparameters": {
       "metric": "cpu",
       "kind": "transformer",
@@ -1153,8 +1153,8 @@
       }
     },
     "inference_latency_ms": {
-      "validation_mean": 0.24016666672347733,
-      "test_mean": 0.25228125014109537
+      "validation_mean": 0.24590416675588736,
+      "test_mean": 0.24147812564478954
     },
     "calibration": {
       "5": {
@@ -1208,13 +1208,13 @@
         "status": "uncalibrated"
       }
     },
-    "weights_file": "transformer-cpu-364d018869430e27.pt",
-    "artifact_hash": "244cfbe44d6d614ce8e329f5779fa390bde3362d2b286f56c16fa71a719acb86",
+    "weights_file": "transformer-cpu-0054db8102ae064d.pt",
+    "artifact_hash": "e3cf5603de1400f837aa661360af988815f9c7d90d3dcdd37d54f66c3e0d4794",
     "scale": {
       "center": 0.02936693627575579,
       "spread": 0.018959803272758556
     },
-    "git_commit": "38b319ae20a0f1615031e05fd01d5c459279c7a8",
-    "working_tree_dirty": true
+    "git_commit": "bb4764672d08d6d9d82a5d785be058cda4c467a6",
+    "working_tree_dirty": false
   }
 ]
