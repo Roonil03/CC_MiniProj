@@ -1,6 +1,7 @@
 import math
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from prediction_app.data import NodeSample, SampleStore
@@ -8,7 +9,8 @@ from prediction_app.evaluation import metrics, observed_coverage, residual_radiu
 from prediction_app.models import neural_network, persistence, predict_neural, statistical
 from prediction_app.benchmark import benchmark
 from prediction_app.registry import Registry
-from prediction_app.training import run_training
+from prediction_app.features import Window
+from prediction_app.training import _spaced, run_training
 
 from test_data import event
 
@@ -29,6 +31,16 @@ class ModelTests(unittest.TestCase):
         result = residual_radius([1, 2, 3, 4], [1, 1, 1, 1], 0.5)
         self.assertEqual(result["radius"], 2)
         self.assertEqual(observed_coverage([1, 2], [1, 1], 1), 1.0)
+        unavailable = residual_radius([1, 2, 3], [1, 1, 1], 0.9)
+        self.assertIsNone(unavailable["radius"])
+        self.assertEqual(unavailable["status"], "insufficient_calibration")
+
+    def test_interval_spacing_keeps_each_node(self):
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        windows = [Window(node, "cpu", start + timedelta(seconds=second),
+                          (0.1,), (0.2,))
+                   for second in (0, 60) for node in ("node-a", "node-b")]
+        self.assertEqual(_spaced(windows, 60), windows)
 
     def test_neural_shapes(self):
         import torch

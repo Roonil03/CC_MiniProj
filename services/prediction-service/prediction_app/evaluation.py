@@ -23,14 +23,18 @@ def metrics(actual: list[float], predicted: list[float]) -> dict[str, float | No
 
 
 def residual_radius(actual: list[float], predicted: list[float],
-                    coverage: float = 0.9) -> dict[str, float | int]:
+                    coverage: float = 0.9) -> dict[str, float | int | str | None]:
     """Finite-sample conformal radius from disjoint validation residuals."""
     if not 0 < coverage < 1 or len(actual) != len(predicted) or not actual:
         raise ValueError("invalid calibration inputs")
     residuals = sorted(abs(a - p) for a, p in zip(actual, predicted))
-    rank = min(len(residuals), math.ceil((len(residuals) + 1) * coverage)) - 1
-    return {"radius": residuals[rank], "nominal_coverage": coverage,
-            "calibration_count": len(residuals)}
+    rank = math.ceil((len(residuals) + 1) * coverage)
+    if rank > len(residuals):
+        return {"radius": None, "nominal_coverage": coverage,
+                "calibration_count": len(residuals),
+                "status": "insufficient_calibration"}
+    return {"radius": residuals[rank - 1], "nominal_coverage": coverage,
+            "calibration_count": len(residuals), "status": "calibrated"}
 
 
 def observed_coverage(actual: list[float], predicted: list[float], radius: float) -> float:

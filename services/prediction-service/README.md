@@ -96,11 +96,14 @@ is further divided, in order, into tuning, interval calibration, and coverage
 audit regions with horizon guard gaps. Calibration and audit origins are
 spaced at least one maximum horizon apart. Preprocessing is fitted on training
 history only. MAE, RMSE, MAPE when defined, R² when defined, per-horizon
-interval coverage, inference time, and artifact size are reported. Shared
+interval coverage when enough independent calibration residuals exist,
+inference time, and artifact size are reported. Shared
 tuning and test score origins are capped at the same 64 evenly spaced samples
 for every model. ARIMA/ETS also cap calibration and audit origins because
 they refit on every history. Training uses all available training windows.
-No test partition is used for model fitting or interval calibration.
+No test partition is used for model fitting or interval calibration. A nominal
+interval is reported only when its finite-sample conformal rank exists; for
+example, 90% coverage requires at least nine independent calibration residuals.
 
 `models_saved/registry.json` records model version, dataset hash/source/time
 span, hyperparameters, scores, software versions, Git SHA and dirty status,
