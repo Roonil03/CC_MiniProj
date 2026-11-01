@@ -234,3 +234,50 @@ Integration handoff / limits:
   documented deployment path; image and real-cluster checks remain outstanding.
 - No secrets, kubeconfig, datasets, model artifacts, or unrelated services changed.
 ================================================================================
+
+================================================================================
+MEMBER-2 TESTBED VALIDATION — 2026-11-01 — feature/member2-testbed-validation
+================================================================================
+Scope: Kubernetes/K3s deployment, node telemetry handoff, application
+telemetry contract, safety/actuation gaps. Physical actuation stayed disabled.
+
+Testbed:
+- Pulled main at 712516dc7c381a6f1ff24e24f7781021118b972a, then branched.
+- Built the three existing Go images and deployed one-server/two-agent k3d
+  v1.32.5+k3s1 with NATS, Redis, three telemetry pods, twin, and controller.
+  All seven pods Ready with zero restarts; NATS/Redis 1Gi PVCs Bound.
+- One telemetry pod ran per labeled Kubernetes node. JetStream events reached
+  the twin and the prediction collector. Controller discovery returned three
+  nodes and seven namespace pods. Dry-run was true and a low-fidelity shadow
+  decision returned HTTP 422, approved=false, executed=false.
+- RBAC check: controller can list nodes and update deployments only in dt-ram;
+  cannot update kube-system deployments or read dt-ram secrets. Telemetry and
+  twin pods have no mounted ServiceAccount token.
+
+Dataset handoff:
+- Run ID k3d-20261101T122151Z-712516d; idle/no-fault Docker/WSL2 testbed.
+- Local archive: local-dev/artifacts/k3d-20261101T122151Z-712516d.zip
+  SHA256 cc9f51bd93a33a1ecbd05fa9e9ab5c97b660003ae32d67845007a2744837a985.
+  It contains raw SQLite, processed JSONL, collector manifest, run metadata,
+  and an independent metrics-server/twin snapshot. ZIP integrity passed.
+- JSONL SHA256 acbbdfed5414a141d186c215bc95bc9dbb6179d228c783609377e8a0d9931f4f;
+  5,004 events (1,668/node), 1816.831 seconds, 156 missing one-second buckets
+  per node (8.58%), largest gap 9.557 seconds. Verified manifest and replay
+  into fresh SQLite (5,004 imported). The non-secret manifest is tracked under
+  infrastructure/testbed/manifests/; raw and processed data remain ignored.
+- Windows exporter wrote CRLF bytes after hashing LF; Member-2 verifier
+  normalized only after matching the manifest hash. Member-3 collector was
+  not changed.
+
+Limits and follow-up:
+- In k3d, agent CPU/memory readings reflect shared Docker/WSL2 host scope,
+  while independent metrics-server node readings differ. The trace proves
+  pipeline transport, not valid independent edge-node forecasting data.
+  Twin fidelity remains 0 and autonomy disabled.
+- No application request-rate, latency, workload, or SLO producer is deployed.
+  The proposed measurement contract and exact deployment/safety findings are
+  in infrastructure/testbed/. Physical hardware validation, independent twin
+  fidelity, migration/rollback, and durable audit remain unfinished.
+- Share the ignored archive via a team-approved artifact channel; the PR
+  contains its manifest and documented checksum, not the excluded data file.
+================================================================================

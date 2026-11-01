@@ -106,3 +106,79 @@ func TestNodeRBACIsReadOnly(t *testing.T) {
 		t.Fatal("node reader missing")
 	}
 }
+
+func TestTestbedTelemetryIdentityAndDryRun(t *testing.T) {
+	f, err := os.Open("kubernetes/10-go-services.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	var foundAgent, foundController bool
+	decoder := yaml.NewDecoder(f)
+	for {
+		var doc struct {
+			Kind     string `yaml:"kind"`
+			Metadata struct {
+				Name string `yaml:"name"`
+			} `yaml:"metadata"`
+			Spec struct {
+				Template struct {
+					Spec struct {
+						HostNetwork                  bool   `yaml:"hostNetwork"`
+						ServiceAccountName           string `yaml:"serviceAccountName"`
+						AutomountServiceAccountToken *bool  `yaml:"automountServiceAccountToken"`
+						Containers                   []struct {
+							Env []struct {
+								Name      string `yaml:"name"`
+								Value     string `yaml:"value"`
+								ValueFrom struct {
+									FieldRef struct {
+										FieldPath string `yaml:"fieldPath"`
+									} `yaml:"fieldRef"`
+								} `yaml:"valueFrom"`
+							} `yaml:"env"`
+						} `yaml:"containers"`
+					} `yaml:"spec"`
+				} `yaml:"template"`
+			} `yaml:"spec"`
+		}
+		if err := decoder.Decode(&doc); err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		if doc.Kind != "DaemonSet" && doc.Kind != "Deployment" {
+			continue
+		}
+		if doc.Metadata.Name != "telemetry-agent" && doc.Metadata.Name != "infrastructure-controller" {
+			continue
+		}
+		pod := doc.Spec.Template.Spec
+		if len(pod.Containers) != 1 {
+			t.Fatalf("%s must have one inspected container", doc.Metadata.Name)
+		}
+		env := map[string]struct{ value, field string }{}
+		for _, item := range pod.Containers[0].Env {
+			env[item.Name] = struct{ value, field string }{item.Value, item.ValueFrom.FieldRef.FieldPath}
+		}
+		switch doc.Metadata.Name {
+		case "telemetry-agent":
+			foundAgent = true
+			if doc.Kind != "DaemonSet" || !pod.HostNetwork ||
+				pod.AutomountServiceAccountToken == nil || *pod.AutomountServiceAccountToken ||
+				env["TELEMETRY_NODE_ID"].field != "spec.nodeName" ||
+				env["TELEMETRY_PUBLISH_ENABLED"].value != "true" {
+				t.Fatal("telemetry must use the Kubernetes node identity and publish without Kubernetes credentials")
+			}
+		case "infrastructure-controller":
+			foundController = true
+			if doc.Kind != "Deployment" || pod.ServiceAccountName != "dt-ram-controller" ||
+				env["CONTROLLER_DRY_RUN"].value != "true" {
+				t.Fatal("testbed controller must use its restricted account and stay in dry-run mode")
+			}
+		}
+	}
+	if !foundAgent || !foundController {
+		t.Fatal("testbed telemetry or controller workload is missing")
+	}
+}
