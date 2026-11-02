@@ -41,6 +41,10 @@ checks, and authenticated live actuation are not enabled by the integration.
 
 ## Kubernetes (k3d)
 
+For the validated shadow-mode deployment, telemetry capture, data-quality
+checks, and current limits, see [the testbed runbook](testbed/README.md) and
+[deployment findings](testbed/deployment-findings.md).
+
 ```bash
 k3d cluster create --config infrastructure/k3s/k3d.yaml
 docker build -t dt-ram/telemetry-agent:latest services/telemetry-agent
