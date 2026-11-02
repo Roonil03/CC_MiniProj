@@ -1,0 +1,26 @@
+{
+  "model_id": "temporal-cpu-dc48396b50b5bfc4",
+  "metric": "cpu",
+  "dataset_version": "cde8f08f400bf3dac700c3ec679638cb3259c665baa5f3f8ce3784dd6a6ca7ee",
+  "repeats": 200,
+  "python": "3.10.11",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "logical_cpus": 16,
+  "http_mode": "in_process",
+  "direct_inference": {
+    "mean_ms": 0.10578000132227316,
+    "median_ms": 0.07924999226815999,
+    "p95_ms": 0.18020997813437134,
+    "max_ms": 0.3939000307582319
+  },
+  "http_request": {
+    "mean_ms": 12.823991503100842,
+    "median_ms": 12.080200016498566,
+    "p95_ms": 16.19904003164265,
+    "max_ms": 54.44940004963428
+  },
+  "process_cpu_seconds": 0.15625,
+  "rss_before_bytes": 216666112,
+  "rss_after_bytes": 216682496,
+  "artifact_bytes": 5021
+}

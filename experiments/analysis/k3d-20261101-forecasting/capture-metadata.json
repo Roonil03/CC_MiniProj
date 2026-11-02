@@ -1,0 +1,85 @@
+{
+  "run_id": "k3d-20261101T122151Z-712516d",
+  "git_base_commit": "712516dc7c381a6f1ff24e24f7781021118b972a",
+  "environment": "Docker Desktop Linux/WSL2 k3d",
+  "kubernetes_version": "v1.32.5+k3s1",
+  "kubernetes_context": "k3d-dt-ram",
+  "topology": {
+    "k3d-dt-ram-server-0": "cloud/cloud",
+    "k3d-dt-ram-agent-1": "edge/edge-b",
+    "k3d-dt-ram-agent-0": "edge/edge-a"
+  },
+  "capture_source": "Go telemetry-agent DaemonSet -> NATS JetStream -> prediction collector SQLite",
+  "sample_period_target_seconds": 1,
+  "workload_schedule": [
+    {
+      "end": "2026-11-01T12:51:04.793916+00:00",
+      "state": "idle baseline, no injected workload or fault",
+      "start": "2026-11-01T12:20:47.963363+00:00"
+    }
+  ],
+  "physical_actuation": "disabled",
+  "known_limitations": [
+    "k3d agents observe shared Docker/WSL2 host CPU and memory; node-specific fidelity unvalidated",
+    "no application latency, request-rate, SLO, or workload producer"
+  ],
+  "deployed_images": {
+    "telemetry-agent-dd564": {
+      "image": "docker.io/dt-ram/telemetry-agent:latest",
+      "image_id": "sha256:d1636508d5ca9dbece536837762692fde4f044281fcf96aae5de8bfb120e13e9",
+      "node": "k3d-dt-ram-agent-0"
+    },
+    "telemetry-agent-9wxdz": {
+      "image": "docker.io/dt-ram/telemetry-agent:latest",
+      "image_id": "sha256:d1636508d5ca9dbece536837762692fde4f044281fcf96aae5de8bfb120e13e9",
+      "node": "k3d-dt-ram-agent-1"
+    },
+    "telemetry-agent-zmjnl": {
+      "image": "docker.io/dt-ram/telemetry-agent:latest",
+      "image_id": "sha256:d1636508d5ca9dbece536837762692fde4f044281fcf96aae5de8bfb120e13e9",
+      "node": "k3d-dt-ram-server-0"
+    },
+    "twin-manager-7fb4b7fccf-hz6zd": {
+      "image": "docker.io/dt-ram/twin-manager:latest",
+      "image_id": "sha256:0499a7edd7d1f463928e58d4f526549f6e2b5e3366923492e49d14af3694f926",
+      "node": "k3d-dt-ram-server-0"
+    },
+    "nats-0": {
+      "image": "docker.io/library/nats:2.10-alpine",
+      "image_id": "docker.io/library/nats@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927",
+      "node": "k3d-dt-ram-agent-1"
+    },
+    "redis-0": {
+      "image": "docker.io/library/redis:7-alpine",
+      "image_id": "docker.io/library/redis@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f",
+      "node": "k3d-dt-ram-server-0"
+    },
+    "infrastructure-controller-6c58ddb564-n8p8j": {
+      "image": "docker.io/dt-ram/infrastructure-controller:latest",
+      "image_id": "sha256:d47a4c3d75472ca9a078949a21b8fb430faa7f8af07ed565c843eb09f86f5796",
+      "node": "k3d-dt-ram-agent-1"
+    }
+  },
+  "docker_engine_version": "28.4.0",
+  "k3d_source_version": "github.com/k3d-io/k3d/v5@v5.9.0 (locally built binary reports v5-dev)",
+  "kubectl_client_version": "v1.34.1",
+  "observed_sample_count": 5004,
+  "observed_quality": {
+    "k3d-dt-ram-agent-0": {
+      "observed_buckets": 1662,
+      "missing_buckets_within_span": 156
+    },
+    "k3d-dt-ram-agent-1": {
+      "observed_buckets": 1662,
+      "missing_buckets_within_span": 156
+    },
+    "k3d-dt-ram-server-0": {
+      "observed_buckets": 1662,
+      "missing_buckets_within_span": 156
+    }
+  },
+  "observed_mean_interval_seconds_per_node": 1.0899,
+  "observed_max_gap_seconds_per_node": 9.557,
+  "jsonl_sha256": "acbbdfed5414a141d186c215bc95bc9dbb6179d228c783609377e8a0d9931f4f",
+  "replay_added_count": 5004
+}

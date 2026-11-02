@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "event_type": "NODE_METRIC_UPDATED",
+  "source_label": "k3d:k3d-20261101T122151Z-712516d",
+  "sample_count": 5004,
+  "node_ids": [
+    "k3d-dt-ram-agent-0",
+    "k3d-dt-ram-agent-1",
+    "k3d-dt-ram-server-0"
+  ],
+  "period_seconds": 1,
+  "first_timestamp": "2026-11-01T12:20:47.963363+00:00",
+  "last_timestamp": "2026-11-01T12:51:04.793916+00:00",
+  "sha256": "acbbdfed5414a141d186c215bc95bc9dbb6179d228c783609377e8a0d9931f4f",
+  "quality": {
+    "k3d-dt-ram-agent-0": {
+      "observed_buckets": 1662,
+      "missing_buckets_within_span": 156
+    },
+    "k3d-dt-ram-agent-1": {
+      "observed_buckets": 1662,
+      "missing_buckets_within_span": 156
+    },
+    "k3d-dt-ram-server-0": {
+      "observed_buckets": 1662,
+      "missing_buckets_within_span": 156
+    }
+  }
+}

@@ -95,12 +95,13 @@ def _validation_regions(windows, max_horizon: int):
 def _spaced(windows, minimum_seconds: int):
     """Use distinct forecast periods when measuring interval coverage."""
     selected = []
-    last_origin = None
+    last_origin = {}
     gap = timedelta(seconds=minimum_seconds)
     for window in windows:
-        if last_origin is None or window.origin - last_origin >= gap:
+        previous = last_origin.get(window.node_id)
+        if previous is None or window.origin - previous >= gap:
             selected.append(window)
-            last_origin = window.origin
+            last_origin[window.node_id] = window.origin
     return selected
 
 
@@ -161,6 +162,12 @@ def run_training(db: str, output: str, *, metric: str = "cpu", kind: str = "pers
         radii[str(horizon)] = radius
         audit_actual = [w.targets[i] for w in audit]
         audit_predicted = [p[i] for p in audit_preds]
+        if radius["radius"] is None:
+            confidence[str(horizon)] = {"audit_coverage": None,
+                                        "audit_count": len(audit),
+                                        "coverage_lower_bound": None,
+                                        "status": "uncalibrated"}
+            continue
         coverage = observed_coverage(audit_actual, audit_predicted, radius["radius"])
         # Wilson 95% lower bound. It represents observed past interval
         # reliability, not a per-forecast probability of correctness.
@@ -170,13 +177,16 @@ def run_training(db: str, output: str, *, metric: str = "cpu", kind: str = "pers
                  + z*z/(4*n*n))**0.5)) / (1 + z*z/n)
         confidence[str(horizon)] = {"audit_coverage": coverage,
                                     "audit_count": n,
-                                    "coverage_lower_bound": lower if n >= 30 else None}
+                                    "coverage_lower_bound": lower if n >= 30 else None,
+                                    "status": "calibrated"}
     test = _subsample(parts["test"])
     test_report, test_predictions, test_latency_ms = _evaluate(test, forecast, horizons)
     for i, horizon in enumerate(horizons):
-        test_report[str(horizon)]["interval_coverage"] = observed_coverage(
-            [w.targets[i] for w in test], [p[i] for p in test_predictions],
-            radii[str(horizon)]["radius"])
+        radius = radii[str(horizon)]["radius"]
+        test_report[str(horizon)]["interval_coverage"] = (
+            observed_coverage([w.targets[i] for w in test],
+                              [p[i] for p in test_predictions], radius)
+            if radius is not None else None)
 
     dataset_version = _dataset_hash(samples)
     source_hash = _source_hash()
