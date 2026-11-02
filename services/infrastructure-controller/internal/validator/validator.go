@@ -1,6 +1,6 @@
 // Package validator enforces the action schema gate:
 // every command passes authentication -> schema validation -> policy
-// validation -> safety validation -> Kubernetes operation (Design.md Sec 13).
+// validation -> safety validation -> Kubernetes operation.
 package validator
 
 import (

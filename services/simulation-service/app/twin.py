@@ -1,8 +1,8 @@
 """Digital Twin state model (Member-4, Python side).
 
-Mirrors the Go twin-manager semantics from Member-2: timestamped node and
-workload state, staleness detection, and the Design.md Section 18 fidelity
-score with autonomy bands. This module never touches Kubernetes.
+Mirrors the Go twin-manager semantics: timestamped node and workload state,
+staleness detection, and the fidelity score with autonomy bands. This module
+never touches Kubernetes.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ class WorkloadState:
     slo_ms: float = 50.0
 
 
-# Weights and normalizers mirror the Go implementation (Design Sec 18).
+# Weights and normalizers mirror the Go implementation.
 _FIDELITY_W = {"cpu": 1.0, "memory": 1.0, "network_in": 0.5, "network_out": 0.5}
 _FIDELITY_Z = {"cpu": 1.0, "memory": 1.0, "network_in": 1000.0, "network_out": 1000.0}
 

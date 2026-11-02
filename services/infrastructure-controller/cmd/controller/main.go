@@ -1,5 +1,5 @@
 // Command controller runs the DT-RAM infrastructure controller:
-// the only service allowed to mutate Kubernetes (Design.md Sections 13, 66).
+// the only service allowed to mutate Kubernetes.
 package main
 
 import (
@@ -51,7 +51,7 @@ func main() {
 		deps.Discovery = reader
 	}
 
-	// Best-effort NATS consumer for RESOURCE_DECISION events (Design Sec 54).
+	// Best-effort NATS consumer for RESOURCE_DECISION events.
 	if nc, err := nats.Connect(cfg.NATSURL); err != nil {
 		log.Printf("NATS unavailable (%v); controller running in HTTP-only mode", err)
 	} else {

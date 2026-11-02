@@ -29,7 +29,7 @@ The idle/no-fault run spans `2026-11-01T12:20:47.963363Z` to `12:51:04.793916Z` 
 
 The collector's Windows export initially used CRLF file bytes while its manifest hash covered LF bytes. `verify_export.py --normalize-lf` rewrote the file only after the normalized bytes matched the manifest; a subsequent verification without normalization and `Get-FileHash` both matched SHA-256 `acbbdfed5414a141d186c215bc95bc9dbb6179d228c783609377e8a0d9931f4f`. Import into a fresh SQLite database returned `added=5004, total=5004`. This workaround does not change the event values. The exporter mismatch belongs to Member 3's collector; this PR leaves that component untouched.
 
-The dataset and raw SQLite database remain local because `.gitignore` excludes them. The PR carries the manifest, run instructions, measured quality, and limitations. The archive path and checksum are recorded in `member2.txt` for the teammate handoff; transfer through a team-approved artifact channel is still needed before another machine can use it.
+The dataset and raw SQLite database remain local because `.gitignore` excludes them. The local archive is `local-dev/artifacts/k3d-20261101T122151Z-712516d.zip`, SHA-256 `cc9f51bd93a33a1ecbd05fa9e9ab5c97b660003ae32d67845007a2744837a985`; it contains the raw SQLite database, processed JSONL, collector manifest, run metadata, and independent metrics-server/twin snapshot. ZIP integrity passed. Transfer through a team-approved artifact channel is still needed before another machine can use it.
 
 ## Safety and actuation gaps
 

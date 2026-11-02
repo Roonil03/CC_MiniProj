@@ -1,6 +1,6 @@
 """Single-agent PPO baseline (Member-4).
 
-PPO first per AGENTS.md: stable, reproducible, discrete/mixed-action
+PPO first per docs/AGENTS.md: stable, reproducible, discrete/mixed-action
 friendly. MARL only after this baseline is reliable. Training target is
 always the simulator/twin — never physical infrastructure.
 """

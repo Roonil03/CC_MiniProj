@@ -1,5 +1,5 @@
 // Package model defines twin-manager schemas.
-// Mirrors Design.md Section 16 node/workload state and Section 53 events.
+// Mirrors the node/workload state and telemetry event contracts.
 package model
 
 import "time"
@@ -21,7 +21,7 @@ type NodeState struct {
 	Fidelity          float64   `json:"fidelity"`
 }
 
-// WorkloadState mirrors the service placement view (Design.md Section 16).
+// WorkloadState mirrors the service placement view.
 type WorkloadState struct {
 	ServiceID       string    `json:"service_id"`
 	Replicas        int       `json:"replicas"`
@@ -50,7 +50,7 @@ type TelemetryIngest struct {
 	Timestamp       time.Time `json:"timestamp"`
 }
 
-// FidelityReport exposes the Design.md Section 18 fidelity score.
+// FidelityReport exposes the twin fidelity score.
 type FidelityReport struct {
 	NodeID        string    `json:"node_id"`
 	Fidelity      float64   `json:"fidelity"`

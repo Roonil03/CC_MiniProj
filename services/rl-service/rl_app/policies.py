@@ -1,4 +1,4 @@
-"""Policy/model registry metadata (Member-4, Design Sec 56).
+"""Policy/model registry metadata.
 
 Every policy records model_id, version, dataset, hyperparameters, metrics
 and git commit so experiments are reproducible (Sec 57).

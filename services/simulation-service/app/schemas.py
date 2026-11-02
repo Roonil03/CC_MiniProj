@@ -1,7 +1,7 @@
 """DT-RAM simulation-service shared schemas.
 
-Event/contract shapes follow Design.md Sections 16 (node/workload state),
-53 (NODE_METRIC_UPDATED) and 54 (RESOURCE_DECISION). Field names are stable
+Event/contract shapes cover node/workload state, NODE_METRIC_UPDATED, and
+RESOURCE_DECISION. Field names are stable
 contracts shared with the Go twin-manager / infrastructure-controller.
 """
 

@@ -13,7 +13,7 @@ metadata:
 ---
 # Least privilege: controller may read nodes cluster-wide but may only
 # write deployments/scales in dt-ram namespaces. Python/ML services get NO
-# RoleBinding here (Design.md Section 65-66).
+# RoleBinding here.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:

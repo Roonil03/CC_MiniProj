@@ -60,8 +60,8 @@ kubectl apply -f infrastructure/kubernetes/10-go-services.yaml
 ```
 
 RBAC: only the `dt-ram-controller` ServiceAccount may write
-deployments/scales in `dt-ram`. ML/RL services receive no write bindings
-(Design.md Sections 65-66).
+deployments/scales in `dt-ram`. ML/RL services receive no write bindings;
+see `infrastructure/kubernetes/00-namespace-rbac.yaml`.
 
 Telemetry runs once per node as a DaemonSet, uses the physical node name and
 host networking for network counters, and explicitly enables event publication.

@@ -1,4 +1,4 @@
-# NATS JetStream subjects (Design.md Sections 52-54).
+# NATS JetStream subjects used by the event transport.
 # Sync (request/reply over HTTP) is used for API queries; async NATS for
 # telemetry / decisions. State/audit events below are planned contracts.
 # This is a reference file, not a NATS provisioning configuration.

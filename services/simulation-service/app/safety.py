@@ -2,7 +2,7 @@
 
 Explicit checks, not reward shaping: capacity, SLO, health, DT freshness /
 fidelity, prediction confidence, migration storm limits and cooldowns
-(Design Sec 33-36, AGENTS.md safety boundary). Fail-closed everywhere.
+(docs/AGENTS.md safety boundary). Fail-closed everywhere.
 """
 
 from __future__ import annotations

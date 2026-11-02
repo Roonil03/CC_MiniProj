@@ -1,13 +1,13 @@
 // Package model defines the DT-RAM telemetry schemas owned by Member-2.
 //
-// Schemas follow Design.md Section 16 (node/workload state) and
-// Section 53 (NODE_METRIC_UPDATED event). Field names are stable
-// contracts shared with twin-manager and infrastructure-controller.
+// Schemas cover node/workload state and the NODE_METRIC_UPDATED event.
+// Field names are stable contracts shared with twin-manager and
+// infrastructure-controller.
 package model
 
 import "time"
 
-// NodeState mirrors Design.md Section 16 node representation.
+// NodeState represents a node's telemetry and health state.
 type NodeState struct {
 	NodeID           string    `json:"node_id"`
 	Location         string    `json:"location"`
@@ -22,7 +22,7 @@ type NodeState struct {
 	Timestamp        time.Time `json:"timestamp"`
 }
 
-// WorkloadState mirrors Design.md Section 16 workload representation.
+// WorkloadState represents a workload's placement and resource state.
 type WorkloadState struct {
 	ServiceID       string    `json:"service_id"`
 	Replicas        int       `json:"replicas"`
@@ -46,7 +46,7 @@ type NodeMetrics struct {
 	NetworkOutMbps float64 `json:"network_out"` // Mbps
 }
 
-// NodeMetricEvent is the NATS event per Design.md Section 53.
+// NodeMetricEvent is the NATS event published by this agent.
 type NodeMetricEvent struct {
 	EventType string      `json:"event_type"`
 	Timestamp time.Time   `json:"timestamp"`

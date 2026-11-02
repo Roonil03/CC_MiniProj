@@ -1,5 +1,5 @@
 // Command twin runs the DT-RAM twin-manager: synchronized virtual state,
-// fidelity scoring and the HTTP/NATS sync surface (Design.md Sections 15-18).
+// fidelity scoring and the HTTP/NATS sync surface.
 package main
 
 import (

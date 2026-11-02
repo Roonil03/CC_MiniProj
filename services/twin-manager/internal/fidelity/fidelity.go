@@ -1,4 +1,4 @@
-// Package fidelity implements the DT fidelity score from Design.md Section 18:
+// Package fidelity implements the DT fidelity score:
 //
 //	F_t = 1 - sum(w_i * |x_physical - x_twin|) / sum(w_i * Z_i)
 //

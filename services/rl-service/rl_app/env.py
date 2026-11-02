@@ -1,6 +1,6 @@
 """RL MDP environment (Member-4): single-agent PPO baseline.
 
-State (Design Sec 22): per-node CPU, MEM, NET, LAT, LOAD, QUEUE, SLO slack,
+State: per-node CPU, MEM, NET, LAT, LOAD, QUEUE, SLO slack,
 HEALTH plus predicted horizon values. The agent sees current + predicted
 future state. Action space (Sec 23): NOOP / MIGRATE / SCALE / PLACE /
 RESOURCE_ADJUST encoded discretely. Reward (Sec 25): multi-objective with
