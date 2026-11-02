@@ -7,6 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /workspace
 
+RUN pip install --no-cache-dir "numpy>=1.24.0" "statsmodels>=0.14.0"
+
 # The demo reads Kubernetes state with kubectl. Follow the official stable
 # release pointer and verify the downloaded binary before installing it.
 ARG TARGETARCH
@@ -27,5 +29,7 @@ RUN apt-get update \
 
 COPY scripts/demo.py /workspace/scripts/demo.py
 COPY services/simulation-service/app /workspace/services/simulation-service/app
+COPY services/prediction-service/prediction_app/__init__.py /workspace/services/prediction-service/prediction_app/__init__.py
+COPY services/prediction-service/prediction_app/models.py /workspace/services/prediction-service/prediction_app/models.py
 
 ENTRYPOINT ["python", "/workspace/scripts/demo.py"]
