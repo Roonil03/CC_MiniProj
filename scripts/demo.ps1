@@ -8,6 +8,7 @@ $clusterConfig = Join-Path $repoRoot 'infrastructure/k3s/k3d.yaml'
 $dockerfile = Join-Path $repoRoot 'Dockerfile.demo'
 $image = 'dt-ram/demo:latest'
 $containerKubeconfig = '/tmp/dt-ram-kubeconfig'
+$jsonOutput = $args -contains '--json'
 
 function Stop-Demo([string] $Message, [int] $ExitCode = 1) {
     [Console]::Error.WriteLine("DT-RAM demo launcher: $Message")
@@ -33,17 +34,17 @@ if (-not (Test-Path -LiteralPath $dockerfile -PathType Leaf)) {
 
 & k3d cluster get $clusterName *> $null
 if ($LASTEXITCODE -eq 0) {
-    Write-Output "Using existing k3d cluster: $clusterName"
+    [Console]::Error.WriteLine("Using existing k3d cluster: $clusterName")
 } else {
-    Write-Output "Creating k3d cluster: $clusterName"
-    & k3d cluster create --config $clusterConfig
+    [Console]::Error.WriteLine("Creating k3d cluster: $clusterName")
+    & k3d cluster create --config $clusterConfig | ForEach-Object { [Console]::Error.WriteLine($_) }
     if ($LASTEXITCODE -ne 0) {
         Stop-Demo "could not create k3d cluster '$clusterName'"
     }
 }
 
-Write-Output "Building demo image: $image"
-& docker build --file $dockerfile --tag $image $repoRoot
+[Console]::Error.WriteLine("Building demo image: $image")
+& docker build --file $dockerfile --tag $image $repoRoot | ForEach-Object { [Console]::Error.WriteLine($_) }
 if ($LASTEXITCODE -ne 0) {
     Stop-Demo "could not build image '$image'"
 }
@@ -62,11 +63,19 @@ try {
     )
     [IO.File]::WriteAllText($kubeconfigPath, $kubeconfig, [Text.UTF8Encoding]::new($false))
 
-    Write-Output "Running shadow-only demo against cluster: $clusterName"
-    & docker run --rm `
+    $mode = 'live Kubernetes snapshot feed'
+    if ($args -contains '--once' -or $jsonOutput) { $mode = 'one-shot Kubernetes snapshot' }
+    if ($args -contains '--synthetic') { $mode = 'synthetic fixture' }
+    [Console]::Error.WriteLine("`nDT-RAM local demo`n  Cluster: $clusterName`n  Mode: $mode (shadow-only; no actuation)")
+    if (-not $jsonOutput) { [Console]::Error.WriteLine('  Stop: Ctrl+C') }
+    $dockerOptions = @('--rm', '--init')
+    if (-not [Console]::IsInputRedirected -and -not [Console]::IsOutputRedirected -and -not $jsonOutput) {
+        $dockerOptions += '-it'
+    }
+    & docker run @dockerOptions `
         "--add-host=${clusterApiHost}:host-gateway" `
         --volume "${kubeconfigPath}:${containerKubeconfig}:ro" `
-        $image --kubeconfig $containerKubeconfig @args
+        $image --live --kubeconfig $containerKubeconfig @args
     $demoExitCode = $LASTEXITCODE
 } finally {
     Remove-Item -LiteralPath $kubeconfigPath -Force -ErrorAction SilentlyContinue

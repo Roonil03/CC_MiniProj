@@ -9,6 +9,14 @@ cluster_config="$repo_root/infrastructure/k3s/k3d.yaml"
 dockerfile="$repo_root/Dockerfile.demo"
 image="dt-ram/demo:latest"
 container_kubeconfig="/tmp/dt-ram-kubeconfig"
+json_output=false
+synthetic=false
+once=false
+for arg in "$@"; do
+  [[ "$arg" == "--json" ]] && json_output=true
+  [[ "$arg" == "--synthetic" ]] && synthetic=true
+  [[ "$arg" == "--once" ]] && once=true
+done
 
 fail() {
   printf 'DT-RAM demo launcher: %s\n' "$1" >&2
@@ -23,14 +31,14 @@ command -v k3d >/dev/null 2>&1 || fail 'k3d is required to create the local Kube
 [[ -f "$dockerfile" ]] || fail "expected demo Dockerfile at $dockerfile"
 
 if k3d cluster get "$cluster_name" >/dev/null 2>&1; then
-  printf 'Using existing k3d cluster: %s\n' "$cluster_name"
+  printf 'Using existing k3d cluster: %s\n' "$cluster_name" >&2
 else
-  printf 'Creating k3d cluster: %s\n' "$cluster_name"
-  k3d cluster create --config "$cluster_config" || fail "could not create k3d cluster '$cluster_name'"
+  printf 'Creating k3d cluster: %s\n' "$cluster_name" >&2
+  k3d cluster create --config "$cluster_config" >&2 || fail "could not create k3d cluster '$cluster_name'"
 fi
 
-printf 'Building demo image: %s\n' "$image"
-docker build --file "$dockerfile" --tag "$image" "$repo_root" || fail "could not build image '$image'"
+printf 'Building demo image: %s\n' "$image" >&2
+docker build --file "$dockerfile" --tag "$image" "$repo_root" >&2 || fail "could not build image '$image'"
 
 tmp_kubeconfig="$(mktemp "${TMPDIR:-/tmp}/dt-ram-kubeconfig.XXXXXX")" || fail 'could not create temporary kubeconfig file'
 rewritten_kubeconfig="${tmp_kubeconfig}.rewritten"
@@ -44,8 +52,19 @@ sed -E "s#https://(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0)(:[0-9]+)?#https://${
   "$tmp_kubeconfig" >"$rewritten_kubeconfig" || fail 'could not prepare a container-reachable kubeconfig'
 mv -- "$rewritten_kubeconfig" "$tmp_kubeconfig" || fail 'could not prepare a container-reachable kubeconfig'
 
-printf 'Running shadow-only demo against cluster: %s\n' "$cluster_name"
-docker run --rm \
+mode='live Kubernetes snapshot feed'
+if [[ "$synthetic" == true ]]; then
+  mode='synthetic fixture'
+elif [[ "$once" == true || "$json_output" == true ]]; then
+  mode='one-shot Kubernetes snapshot'
+fi
+printf '\nDT-RAM local demo\n  Cluster: %s\n  Mode: %s (shadow-only; no actuation)\n' "$cluster_name" "$mode" >&2
+[[ "$json_output" == true ]] || printf '  Stop: Ctrl+C\n\n' >&2
+docker_options=(--rm --init)
+if [[ -t 0 && -t 1 && "$json_output" == false ]]; then
+  docker_options+=(-it)
+fi
+docker run "${docker_options[@]}" \
   --add-host="${cluster_api_host}:host-gateway" \
   --volume "$tmp_kubeconfig:$container_kubeconfig:ro" \
-  "$image" --kubeconfig "$container_kubeconfig" "$@"
+  "$image" --live --kubeconfig "$container_kubeconfig" "$@"
