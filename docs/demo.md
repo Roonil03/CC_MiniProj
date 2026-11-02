@@ -1,27 +1,51 @@
-# Synthetic terminal demo
+# Docker and k3d terminal demo
 
-The demo runs a small, deterministic synthetic DT-RAM scenario in the terminal. It needs Python and does not require Docker, Kubernetes, credentials, or extra Python packages. It makes no infrastructure requests: recommendations and safety outcomes are shown in shadow mode, and physical actuation is disabled.
+The demo runs in a Docker container and reads a live k3d Kubernetes cluster. It prints node status and resource metrics, evaluates illustrative candidates against the Digital Twin and safety gate, and remains **shadow-only**: it does not create, change, or delete Kubernetes resources. The launcher creates the documented `dt-ram` cluster when it is absent and reuses it when present. It leaves the cluster running after the demo exits.
 
-Run it from the repository root:
+## Requirements
+
+- Docker with a running Docker daemon
+- k3d
+- A working network connection the first time, to download the demo image dependencies
+
+The cluster must be reachable and expose the Kubernetes Metrics API (`metrics.k8s.io`) with a sample for every node. The launchers build the image from the repository root, pass a temporary kubeconfig into the container, and stream its output to the terminal. You do not need to install Python or kubectl on the host.
+
+## Run the demo
+
+From the repository root, run one of:
 
 ```bash
 bash scripts/demo.sh
-bash scripts/demo.sh --seed 42
 ```
-
-On PowerShell:
 
 ```powershell
 ./scripts/demo.ps1
-./scripts/demo.ps1 --seed 42
 ```
 
-Both launchers locate `scripts/demo.py` relative to themselves, so they also work when called from another current directory. They forward all arguments to the Python script. The Bash launcher looks for `python3` and then `python`; the PowerShell launcher looks for the Python `py` launcher and then `python`. Set `PYTHON` to an executable path to select a specific interpreter, including paths containing spaces.
+The first run creates the `dt-ram` k3d cluster from `infrastructure/k3s/k3d.yaml` if needed. Later runs reuse it. The container uses kubectl to read node objects and node metrics. It does not read workload metrics or send infrastructure changes.
 
-The optional `--seed` argument selects the synthetic scenario seed. Use `--no-color` for plain terminal output or `--json` for machine-readable output.
+To print machine-readable output or disable terminal colors, pass the demo options through the launcher:
 
-## Reading the demo
+```bash
+bash scripts/demo.sh --json
+bash scripts/demo.sh --no-color
+```
 
-The displayed metrics describe the synthetic workload and candidate outcomes; they are not measurements from a live cluster. CPU and memory show current or simulated utilization. `P95` is the simulator's latency estimate, `SLO P` is its estimated probability of an SLO violation, and `MIG COST` summarizes migration overhead; migration duration is shown for approved migration candidates. These estimates compare scenarios and are not production measurements.
+```powershell
+./scripts/demo.ps1 --json
+./scripts/demo.ps1 --no-color
+```
 
-The candidates include keeping the current placement (`NOOP`), scaling, and migrating to a healthy or stale node. Each is simulated against the Digital Twin and then checked by the safety gate. `APPROVED` and `DENIED` are illustrative gate verdicts; a denied candidate includes the gate's reasons. Even an approved candidate is shadow-only: it records what could be done but does not change workloads or Kubernetes resources.
+The original synthetic fixture remains available with `--synthetic`; it does not use live cluster data. The seed controls its deterministic variation:
+
+```bash
+bash scripts/demo.sh --synthetic --seed 42
+```
+
+## Reading the output
+
+Live node CPU and memory values come from Kubernetes Metrics API samples; node health comes from Kubernetes node conditions. These values are observations of the local k3d testbed and are not measurements from physical edge hardware. The scenario candidates are illustrative and do not describe the workloads actually running in the cluster. P95 latency, SLO violation probability, and migration overhead are simulator estimates, not production measurements.
+
+The Digital Twin has no independent, scope-matched reference measurement in this demo, so its fidelity remains zero. It also has no live prediction model, so prediction confidence remains zero. The safety gate therefore fails closed for non-no-op candidates. An approved no-op or any printed verdict is informational only. No candidate is sent to the Go controller, and no actuation is performed.
+
+The demo fails with an error if the Kubernetes API is unreachable or if node metrics are unavailable for any node. Ensure the cluster is ready and its metrics-server has populated samples, then rerun the launcher.

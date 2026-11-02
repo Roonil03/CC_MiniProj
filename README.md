@@ -12,7 +12,7 @@ The system uses a Node.js API gateway and experiment registry, Go telemetry and 
 
 ## Explore the project
 
-- [Synthetic terminal demo](docs/demo.md) — run a shadow-only decision walkthrough with Bash or PowerShell
+- [Docker and k3d terminal demo](docs/demo.md) — inspect live node health and metrics, then evaluate illustrative shadow-only candidates
 - [API and event reference](API.md)
 - [Architecture](docs/architecture.md) and [design document](Design.md)
 - [Local deployment and infrastructure guide](infrastructure/README.md)

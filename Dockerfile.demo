@@ -1,0 +1,31 @@
+# Build from the repository root:
+# docker build -f Dockerfile.demo -t dt-ram/demo:latest .
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /workspace
+
+# The demo reads Kubernetes state with kubectl. Follow the official stable
+# release pointer and verify the downloaded binary before installing it.
+ARG TARGETARCH
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && set -eu; \
+       case "${TARGETARCH:-amd64}" in \
+         amd64|arm64) kubectl_arch="${TARGETARCH:-amd64}" ;; \
+         *) echo "Unsupported kubectl architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+       esac; \
+       version="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"; \
+       curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${version}/bin/linux/${kubectl_arch}/kubectl"; \
+       curl -fsSLo /tmp/kubectl.sha256 "https://dl.k8s.io/release/${version}/bin/linux/${kubectl_arch}/kubectl.sha256"; \
+       echo "$(cat /tmp/kubectl.sha256)  /usr/local/bin/kubectl" | sha256sum --check; \
+       chmod 0755 /usr/local/bin/kubectl; \
+       rm /tmp/kubectl.sha256
+
+COPY scripts/demo.py /workspace/scripts/demo.py
+COPY services/simulation-service/app /workspace/services/simulation-service/app
+
+ENTRYPOINT ["python", "/workspace/scripts/demo.py"]
