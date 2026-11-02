@@ -14,7 +14,6 @@ The system uses a Node.js API gateway and experiment registry, Go telemetry and 
 
 - [Docker and k3d terminal demo](docs/demo.md) — inspect live node health and metrics, then evaluate illustrative shadow-only candidates
 - [API and event reference](API.md)
-- [Architecture](docs/architecture.md) and [design document](Design.md)
 - [Local deployment and infrastructure guide](infrastructure/README.md)
 - [Experiment protocol](docs/experiments.md)
 
