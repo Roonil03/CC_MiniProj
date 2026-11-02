@@ -349,7 +349,7 @@ def _manifest(source: str, models: list[str]) -> dict:
         ]
         in_process = ["Read-only kubectl calls: Node objects, metrics.k8s.io usage, current context", *common]
     else:
-        host_container = ["None: the whole demo runs inside this python process (no Docker/Kubernetes part)"]
+        host_container = ["No Kubernetes cluster is required for the synthetic fixture"]
         in_process = ["Seeded synthetic fixture generator (build_demo)", *common]
     return {
         "host_container": host_container,
@@ -404,8 +404,13 @@ class _ForecastTracker:
         self._series: dict[tuple[str, str], deque] = {}
         self._errors: dict[tuple[str, str, str], deque] = {}
         self._pending: dict[tuple[str, str], dict[str, float]] = {}
+        self._timestamps: dict[str, datetime] = {}
 
-    def observe(self, node_id: str, cpu_util: float, mem_util: float) -> None:
+    def observe(self, node_id: str, cpu_util: float, mem_util: float, timestamp: datetime) -> None:
+        previous = self._timestamps.get(node_id)
+        if previous is not None and timestamp <= previous:
+            return
+        self._timestamps[node_id] = timestamp
         for metric, value in (("cpu", cpu_util), ("memory", mem_util)):
             series = self._series.setdefault((node_id, metric), deque(maxlen=self._history))
             pending = self._pending.get((node_id, metric))
@@ -456,6 +461,26 @@ class _ForecastTracker:
 
     def samples(self, node_id: str) -> int:
         return len(self._series.get((node_id, "cpu"), ()))
+
+
+def _forecast_snapshot(
+    twin: TwinState, tracker: _ForecastTracker
+) -> tuple[dict[str, list[ForecastPoint]], float]:
+    """Observe one distinct snapshot, forecast it, and return measured confidence."""
+    nodes = twin.list_nodes()
+    for node in nodes:
+        tracker.observe(node.node_id, node.cpu_util, node.mem_util, node.timestamp)
+    rows_by_node = {node.node_id: tracker.forecast(node.node_id) for node in nodes}
+    measured = [
+        row.confidence
+        for rows in rows_by_node.values()
+        for row in rows
+        if row.value is not None
+    ]
+    confidence = min(measured, default=0.0)
+    if any(node.stale for node in nodes):
+        confidence = 0.0
+    return rows_by_node, confidence
 
 
 _SPARK_CHARS = "▁▂▃▄▅▆▇█"
@@ -538,7 +563,7 @@ def _render_frame(
     lines.append("")
     lines.extend(_manifest_lines(_manifest("kubernetes", models)))
     lines.append("")
-    lines.append("DIGITAL TWIN (read-only Node API + metrics.k8s.io, resynced every tick)")
+    lines.append("DIGITAL TWIN (read-only Kubernetes Node API + metrics.k8s.io, resynced every tick)")
     node_width = max(14, *(len(node.node_id) for node in twin.list_nodes()))
     lines.append(
         f"{'NODE':<{node_width}} {'CPU':>7} {'MEM':>7} {'CPU HIST':>12} {'FIDELITY':>10} {'SAMPLES':>8}  STATUS"
@@ -631,19 +656,7 @@ def run_live(args: argparse.Namespace, color: bool) -> int:
             twin.refresh_staleness()
             context = _current_context(args.kubeconfig)
             actions, results = _tick_actions(twin)
-            for node in twin.list_nodes():
-                tracker.observe(node.node_id, node.cpu_util, node.mem_util)
-            rows_by_node = {node.node_id: tracker.forecast(node.node_id) for node in twin.list_nodes()}
-            # Gate confidence = the current tick's measured forecast confidence
-            # (minimum across models/metrics; 0 while any current model row
-            # lacks a realized forecast). computed from rows_by_node only.
-            measured = [
-                row.confidence
-                for rows in rows_by_node.values()
-                for row in rows
-                if row.value is not None
-            ]
-            confidence = min(measured, default=0.0)
+            rows_by_node, confidence = _forecast_snapshot(twin, tracker)
             verdicts = _verdicts(twin, actions, results, prediction_confidence=confidence)
             frame = _render_frame(
                 tick=tick + 1,
@@ -727,8 +740,10 @@ def main() -> int:
             print(f"DT-RAM Kubernetes snapshot failed: {exc}", file=sys.stderr)
             return 2
         mode = "kubernetes"
+    tracker = _ForecastTracker(available_forecast_models(), args.history)
+    _rows_by_node, confidence = _forecast_snapshot(twin, tracker)
     verdicts = _verdicts(
-        twin, actions, results, prediction_confidence=0.0 if mode == "kubernetes" else 0.92
+        twin, actions, results, prediction_confidence=confidence
     )
     if args.json:
         print(
@@ -739,6 +754,10 @@ def main() -> int:
                     "context": context,
                     "seed": args.seed if args.synthetic else None,
                     "components": _manifest(mode, available_forecast_models()),
+                    "prediction_confidence": confidence,
+                    "prediction_confidence_note": (
+                        "This one-shot has no realized forecast; non-NOOP candidates fail closed."
+                    ),
                     "nodes": [
                         {
                             "id": n.node_id,
@@ -789,11 +808,12 @@ def main() -> int:
         print(line)
     print()
     if mode == "kubernetes":
-        print("DIGITAL TWIN (read-only Node API + metrics.k8s.io snapshot)")
-        print("Network metrics and model confidence are unavailable; fidelity/confidence are 0.")
+        print("DIGITAL TWIN (read-only Kubernetes Node API + metrics.k8s.io snapshot)")
+        print(f"Network metrics are unavailable; measured forecast confidence is {confidence:.3f}.")
         print("The safety gate therefore fails closed for non-NOOP actions.")
     else:
         print("DIGITAL TWIN (synthetic fixture; fidelity compared with independent synthetic samples)")
+        print(f"Measured forecast confidence: {confidence:.3f} (0 until a forecast is realized).")
     node_width = max(14, *(len(node.node_id) for node in twin.list_nodes()))
     print(f"{'NODE':<{node_width}} {'CPU':>7} {'MEM':>7} {'FIDELITY':>10}  STATUS")
     for node in twin.list_nodes():
