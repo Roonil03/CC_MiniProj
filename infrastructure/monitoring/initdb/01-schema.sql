@@ -1,4 +1,4 @@
--- DT-RAM TimescaleDB bootstrap (Member-2, Design.md Section 55).
+-- DT-RAM TimescaleDB bootstrap schema.
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 CREATE TABLE IF NOT EXISTS nodes (

@@ -1,4 +1,4 @@
-# k3d topology for local edge-cloud emulation (Design.md Sections 37-38).
+# k3d topology for local edge-cloud emulation.
 apiVersion: k3d.io/v1alpha5
 kind: Simple
 metadata:

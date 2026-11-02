@@ -3,7 +3,8 @@
 Answers "what is likely to happen if this action is taken?" for candidate
 actions (no-op, migrate, scale, place, resource-adjust) against the twin
 state. Models resource, workload/queueing, network and migration dynamics
-(Design Sec 29-31). A simulated action is an evaluation result — never a
+(resource, queueing, network, and migration dynamics). A simulated action is
+an evaluation result — never a
 permission to touch Kubernetes.
 """
 
@@ -29,7 +30,7 @@ class SimResult:
 
 
 def migration_duration(state_mb: float, bandwidth_mbps: float, overhead_s: float = 2.0) -> float:
-    """Design Sec 31 first approximation: T = S_state/B_effective + T_overhead."""
+    """First-order estimate: T = S_state/B_effective + T_overhead."""
     if bandwidth_mbps <= 0:
         return -1.0
     return (state_mb * 8.0 / bandwidth_mbps) + overhead_s

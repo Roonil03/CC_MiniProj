@@ -1,6 +1,6 @@
 // Package config loads infrastructure-controller settings.
-// Defaults follow .env.example (port 8081) and Design.md Section 58
-// safety tunables. Never hard-code experiment parameters elsewhere.
+// Defaults follow .env.example (port 8081) and service safety tunables.
+// Never hard-code experiment parameters elsewhere.
 package config
 
 import (

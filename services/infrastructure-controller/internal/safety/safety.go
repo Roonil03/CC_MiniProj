@@ -1,7 +1,7 @@
 // Package safety implements the explicit safety/policy gate.
-// Safety is enforced by checks, not reward shaping (AGENTS.md):
+// Safety is enforced by checks, not reward shaping (docs/AGENTS.md):
 // capacity, SLO, health, DT freshness/fidelity, prediction confidence,
-// migration storm limits and per-node cooldowns (Design.md Sections 33-36).
+// migration storm limits and per-node cooldowns.
 package safety
 
 import (
@@ -43,7 +43,7 @@ func (g *Gate) Evaluate(req model.DecisionRequest) model.SafetyVerdict {
 		return model.SafetyVerdict{Approved: true, Reasons: []string{"noop always safe"}}
 	}
 
-	// DT fidelity gate (Design.md Section 18 + AGENTS.md fallback).
+	// DT fidelity gate (see the repository safety guidance).
 	if !probability(req.DTFidelity) || req.DTFidelity < g.cfg.MinFidelity || req.DTFidelity <= 0.95 {
 		reject("dt fidelity %.3f below minimum %.3f: disable RL actuation", req.DTFidelity, g.cfg.MinFidelity)
 	}
@@ -107,8 +107,8 @@ func (g *Gate) RecordMigration(source string) {
 	g.nodeLast[source] = now
 }
 
-// MigrationDurationEstimate implements Design.md Section 31 first
-// approximation: T = S_state / B_effective + T_overhead.
+// MigrationDurationEstimate uses the first-order estimate
+// T = S_state / B_effective + T_overhead.
 func MigrationDurationEstimate(stateMB, bandwidthMbps, overheadSec float64) float64 {
 	if bandwidthMbps <= 0 {
 		return -1

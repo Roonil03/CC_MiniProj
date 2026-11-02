@@ -22,6 +22,6 @@ placement verification, and production model/policy validation exist.
 
 ## Kubernetes and K3s
 
-Kubernetes and K3s topology setup, Prometheus, and Grafana deployment remain
-covered by [Design.md](../Design.md) Sections 37–39 and the manifests under
-`infrastructure/kubernetes/`.
+Kubernetes and K3s topology setup, Prometheus, and Grafana deployment are
+covered by the manifests under `infrastructure/kubernetes/` and the topology
+configuration in `infrastructure/k3s/`.

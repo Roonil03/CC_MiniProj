@@ -1,6 +1,6 @@
 // Package model defines infrastructure-controller schemas.
-// Action encoding follows Design.md Section 24; decision events follow
-// Section 54. Only validated + safety-approved actions reach Kubernetes.
+// Action encoding follows the decision event contract. Only validated and
+// safety-approved actions reach Kubernetes.
 package model
 
 import "time"

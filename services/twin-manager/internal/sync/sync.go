@@ -1,6 +1,6 @@
 // Package sync implements the twin synchronization cycle:
 // Physical state -> Telemetry -> Normalize -> Timestamp -> Validate
-// -> Twin state update (Design.md Section 17).
+// -> Twin state update.
 package sync
 
 import (

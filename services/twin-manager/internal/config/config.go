@@ -1,6 +1,6 @@
 // Package config loads twin-manager settings.
 // Defaults follow .env.example (TWIN_MANAGER_PORT=8080) and
-// Design.md Section 58 thresholds.
+// configured staleness thresholds.
 package config
 
 import (

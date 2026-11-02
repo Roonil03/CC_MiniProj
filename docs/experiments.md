@@ -1,6 +1,6 @@
 ﻿# Experimental Design & Benchmark Protocol
 
-Evaluation metrics (SLOVR, CDA, Decision Regret) and baseline comparisons. See [Design.md](../Design.md) Sections 43-50.
+Evaluation metrics include SLOVR, CDA, Decision Regret, and baseline comparisons.
 
 ## Member 3 forecasting experiment protocol
 

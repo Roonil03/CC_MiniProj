@@ -1,5 +1,5 @@
 // Command agent runs the DT-RAM telemetry agent: collects host metrics
-// and publishes NODE_METRIC_UPDATED events (Design.md Section 53).
+// and publishes NODE_METRIC_UPDATED events.
 package main
 
 import (
@@ -46,7 +46,7 @@ func main() {
 		}
 	}()
 
-	// Background sampler at CPU poll interval (Design.md Section 17: 1s).
+	// Background sampler at the configured CPU poll interval.
 	ticker := time.NewTicker(cfg.CPUPoll)
 	defer ticker.Stop()
 	stop := make(chan os.Signal, 1)
