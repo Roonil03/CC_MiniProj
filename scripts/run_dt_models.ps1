@@ -90,7 +90,7 @@ try {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw "Docker CLI is required; install Docker Desktop with Linux containers and GPU support first" }
     if (-not (Test-Path -LiteralPath (Join-Path $repo ".env"))) { throw "Local .env is required for Compose; copy .env.example and set unique credentials" }
     $composeArgs = @("compose", "--env-file", (Join-Path $repo ".env"),
-                     "--project-directory", $repo, "-f", $compose, "-f", $composeGpu)
+                     "-f", $compose, "-f", $composeGpu)
     if ((Invoke-Local "docker-preflight" "docker" ($composeArgs + @("config", "--quiet"))) -ne 0) { throw "GPU Compose configuration is invalid" }
     if ((Invoke-Local "docker-start" "docker" ($composeArgs + @("up", "-d", "--build", "--pull", "missing"))) -ne 0) { throw "Could not pull missing images, build images, and start local Docker services" }
     if ((Invoke-Local "docker-gpu-check" "docker" ($composeArgs + @("exec", "-T", "prediction-service", "python", "-c", "import torch; assert torch.cuda.is_available(), 'CUDA GPU unavailable in prediction container'; print(torch.cuda.get_device_name(0))"))) -ne 0) { throw "Prediction container cannot access CUDA GPU" }
