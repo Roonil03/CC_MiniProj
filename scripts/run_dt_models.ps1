@@ -2,14 +2,10 @@
 param(
     [string]$OutputRoot = "experiments/runs/windows-models",
     [string]$RunId = "",
-    [ValidateSet("persistence", "arima", "ets", "lstm", "gru", "temporal", "transformer")]
     [string[]]$Models = @("persistence", "arima", "ets", "lstm", "gru", "temporal", "transformer"),
-    [ValidateSet("cpu", "memory", "network_in", "network_out")]
     [string[]]$Metrics = @("cpu"),
-    [ValidateSet("stable", "burst", "memory-pressure")]
     [string[]]$Scenarios = @("stable"),
     [int[]]$Seeds = @(42),
-    [ValidateSet("ppo")]
     [string[]]$Policies = @(),
     [int]$TrainingSteps = 2048,
     [int]$Epochs = 20,
@@ -21,6 +17,18 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$Models = @($Models | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$Metrics = @($Metrics | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$Scenarios = @($Scenarios | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$Policies = @($Policies | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$validModels = @("persistence", "arima", "ets", "lstm", "gru", "temporal", "transformer")
+$validMetrics = @("cpu", "memory", "network_in", "network_out")
+$validScenarios = @("stable", "burst", "memory-pressure")
+$validPolicies = @("ppo")
+if (@($Models | Where-Object { $_ -notin $validModels }).Count -gt 0) { throw "Unsupported model selection: $($Models -join ',')" }
+if (@($Metrics | Where-Object { $_ -notin $validMetrics }).Count -gt 0) { throw "Unsupported metric selection: $($Metrics -join ',')" }
+if (@($Scenarios | Where-Object { $_ -notin $validScenarios }).Count -gt 0) { throw "Unsupported scenario selection: $($Scenarios -join ',')" }
+if (@($Policies | Where-Object { $_ -notin $validPolicies }).Count -gt 0) { throw "Unsupported policy selection: $($Policies -join ',')" }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 if (-not [IO.Path]::IsPathRooted($OutputRoot)) { $OutputRoot = Join-Path $repo $OutputRoot }
 if (-not $RunId) { $RunId = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ") }
@@ -72,7 +80,8 @@ function Invoke-Local([string]$label, [string]$exe, [string[]]$arguments, [strin
 try {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw "Docker CLI is required; install Docker Desktop with Linux containers and GPU support first" }
     if (-not (Test-Path -LiteralPath (Join-Path $repo ".env"))) { throw "Local .env is required for Compose; copy .env.example and set unique credentials" }
-    $composeArgs = @("compose", "-f", $compose, "-f", $composeGpu)
+    $composeArgs = @("compose", "--env-file", (Join-Path $repo ".env"),
+                     "--project-directory", $repo, "-f", $compose, "-f", $composeGpu)
     if ((Invoke-Local "docker-preflight" "docker" ($composeArgs + @("config", "--quiet"))) -ne 0) { throw "GPU Compose configuration is invalid" }
     if ((Invoke-Local "docker-start" "docker" ($composeArgs + @("up", "-d", "--build"))) -ne 0) { throw "Could not build/start local Docker services" }
     if ((Invoke-Local "docker-gpu-check" "docker" ($composeArgs + @("exec", "-T", "prediction-service", "python", "-c", "import torch; assert torch.cuda.is_available(), 'CUDA GPU unavailable in prediction container'; print(torch.cuda.get_device_name(0))"))) -ne 0) { throw "Prediction container cannot access CUDA GPU" }
