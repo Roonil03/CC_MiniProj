@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -31,6 +32,12 @@ func main() {
 	}
 	gate := safety.New(cfg)
 	logStore := audit.New()
+	if path := os.Getenv("DT_RAM_AUDIT_PATH"); path != "" {
+		logStore, err = audit.NewPersistent(path)
+		if err != nil {
+			log.Fatalf("audit restore: %v", err)
+		}
+	}
 
 	var ex executor.Executor = executor.LoggingExecutor{}
 	if !cfg.DryRun {
@@ -72,8 +79,13 @@ func main() {
 			}
 			rec, status := processor.Process(context.Background(), req)
 			log.Printf("decision %s status=%d result=%+v", req.DecisionID, status, rec)
-			_ = m.Ack()
-		}, nats.Durable("infrastructure-controller"), nats.ManualAck(), nats.AckExplicit(), nats.BindStream("DT_DECISIONS"))
+			if status == http.StatusServiceUnavailable && strings.HasPrefix(rec.Message, "audit store unavailable:") {
+				_ = m.Nak()
+			} else {
+				_ = m.Ack()
+			}
+		}, nats.Durable("infrastructure-controller"), nats.ManualAck(), nats.AckExplicit(),
+			nats.MaxDeliver(3), nats.BindStream("DT_DECISIONS"))
 		if err != nil {
 			log.Printf("NATS subscribe failed: %v", err)
 		}

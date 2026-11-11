@@ -95,15 +95,24 @@ export class PostgresExperimentRepository implements ExperimentRepository, OnMod
   }
 
   async update(id: string, patch: Partial<Experiment>): Promise<Experiment | null> {
-    const current = await this.findById(id);
-    if (!current) return null;
-    const next = { ...current, ...patch, updatedAt: new Date().toISOString() };
+    // Update only supplied columns in one statement. A read/merge/write here
+    // can restore stale values when two clients PATCH different fields at once.
+    const columns: Record<string, string> = { name: 'name', status: 'status', results: 'results' };
+    const values: unknown[] = [id];
+    const assignments: string[] = [];
+    for (const [key, column] of Object.entries(columns)) {
+      if (Object.prototype.hasOwnProperty.call(patch, key) && patch[key as keyof Experiment] !== undefined) {
+        values.push(patch[key as keyof Experiment]);
+        assignments.push(`${column}=$${values.length}`);
+      }
+    }
+    values.push(new Date().toISOString());
+    assignments.push(`updated_at=$${values.length}`);
     const result = await this.pool.query<ExperimentRow>(
-      `UPDATE experiments SET name=$2, status=$3, results=$4, updated_at=$5
-       WHERE id=$1 RETURNING *`,
-      [id, next.name, next.status, next.results, next.updatedAt],
+      `UPDATE experiments SET ${assignments.join(', ')} WHERE id=$1 RETURNING *`,
+      values,
     );
-    return this.map(result.rows[0]);
+    return result.rows[0] ? this.map(result.rows[0]) : null;
   }
 
   async delete(id: string): Promise<boolean> {

@@ -24,7 +24,9 @@ type Processor struct {
 func (p *Processor) Process(_ context.Context, req model.DecisionRequest) (model.ActionRecord, int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	rec := model.ActionRecord{DecisionID: req.DecisionID, Action: req.Action, At: time.Now().UTC(), DryRun: p.Config.DryRun || req.DryRun}
+	rec := model.ActionRecord{DecisionID: req.DecisionID, PolicyVersion: req.PolicyVersion,
+		Action: req.Action, Predicted: req.Predicted, DTFidelity: req.DTFidelity,
+		At: time.Now().UTC(), DryRun: p.Config.DryRun || req.DryRun}
 	if req.DecisionID == "" {
 		rec.Message = "decision_id is required"
 		return rec, http.StatusUnprocessableEntity
@@ -47,6 +49,9 @@ func (p *Processor) Process(_ context.Context, req model.DecisionRequest) (model
 			status = http.StatusServiceUnavailable
 		}
 	}
-	p.Audit.Append(rec)
+	if err := p.Audit.Append(rec); err != nil {
+		rec.Message = "audit store unavailable: " + err.Error()
+		return rec, http.StatusServiceUnavailable
+	}
 	return rec, status
 }

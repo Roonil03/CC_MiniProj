@@ -138,6 +138,7 @@ function twinFidelity(nodes: unknown[]): number {
 function toSimulationNode(node: Record<string, any>): Record<string, unknown> {
   const cpuTotal = Number(node.cpu_total ?? 8);
   const memoryTotal = Number(node.memory_total_mb ?? 16384);
+  const stale = isNodeStale(node);
   return {
     node_id: node.node_id,
     cpu: node.cpu !== undefined ? Number(node.cpu) : Number(node.cpu_used ?? 0) / Math.max(cpuTotal, 1e-9),
@@ -148,7 +149,18 @@ function toSimulationNode(node: Record<string, any>): Record<string, unknown> {
     memory_total_mb: memoryTotal,
     network_in: node.network_in ?? node.network_in_mbps ?? 0,
     network_out: node.network_out ?? node.network_out_mbps ?? 0,
-    health: node.stale ? 'unknown' : node.health ?? 'unknown',
+    health: stale ? 'unknown' : node.health ?? 'unknown',
+    timestamp: node.timestamp,
+    stale,
     fidelity: node.fidelity,
   };
+}
+
+function isNodeStale(node: Record<string, any>, now = Date.now()): boolean {
+  if (node.stale === true) return true;
+  if (typeof node.timestamp !== 'string') return true;
+  const timestamp = Date.parse(node.timestamp);
+  // Match the twin manager's default five-second freshness window. Invalid,
+  // missing, or future timestamps are unsafe to treat as current state.
+  return !Number.isFinite(timestamp) || timestamp > now || now - timestamp > 5_000;
 }
