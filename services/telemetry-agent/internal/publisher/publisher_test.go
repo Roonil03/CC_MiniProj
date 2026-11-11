@@ -2,11 +2,34 @@ package publisher
 
 import (
 	"dt-ram/telemetry-agent/internal/model"
+	"errors"
 	"github.com/nats-io/nats.go"
 	"os"
 	"testing"
 	"time"
 )
+
+func TestPublishWithRetryRetriesThenSucceeds(t *testing.T) {
+	calls := 0
+	err := publishWithRetry(func() error {
+		calls++
+		if calls < 3 {
+			return errors.New("temporary acknowledgement failure")
+		}
+		return nil
+	})
+	if err != nil || calls != 3 {
+		t.Fatalf("retry result calls=%d err=%v", calls, err)
+	}
+}
+
+func TestPublishWithRetryReturnsFinalFailure(t *testing.T) {
+	calls := 0
+	err := publishWithRetry(func() error { calls++; return errors.New("offline") })
+	if err == nil || calls != 3 {
+		t.Fatalf("expected bounded failure calls=%d err=%v", calls, err)
+	}
+}
 
 // Run against an isolated JetStream server with NATS_TEST_URL set.
 func TestJetStreamPublishAndReplay(t *testing.T) {

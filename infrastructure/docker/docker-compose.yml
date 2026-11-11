@@ -7,8 +7,8 @@ services:
     volumes:
       - nats-data:/data
     ports:
-      - "4222:4222"
-      - "8222:8222"
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8222/varz"]
       interval: 10s
@@ -18,7 +18,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
@@ -33,9 +33,9 @@ services:
     environment:
       POSTGRES_DB: dt_ram
       POSTGRES_USER: dt_user
-      POSTGRES_PASSWORD: dt_password_change_me
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pg-data:/var/lib/postgresql/data
       - ../monitoring/initdb:/docker-entrypoint-initdb.d:ro
@@ -56,7 +56,7 @@ services:
       TELEMETRY_PUBLISH_ENABLED: "true"
       TELEMETRY_SUBJECT: dt.telemetry.node_metric
     ports:
-      - "8082:8082"
+      - "127.0.0.1:8082:8082"
     depends_on:
       nats:
         condition: service_healthy
@@ -74,9 +74,9 @@ services:
       NATS_URL: nats://nats:4222
       TWIN_SUBJECT: dt.telemetry.node_metric
       REDIS_ADDR: redis:6379
-      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:?set DT_RAM_SERVICE_TOKEN in .env}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
       nats:
         condition: service_healthy
@@ -97,10 +97,13 @@ services:
       DECISION_SUBJECT: dt.decisions.resource
       K8S_NAMESPACE: dt-ram
       CONTROLLER_DRY_RUN: "true"
+      DT_RAM_AUDIT_PATH: /audit/decisions.json
       SAFETY_MAX_MIGRATIONS_PER_MIN: "3"
-      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:?set DT_RAM_SERVICE_TOKEN in .env}
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - controller-audit:/audit
     depends_on:
       nats:
         condition: service_healthy
@@ -117,12 +120,12 @@ services:
       PREDICTION_DATA_PATH: /data/node_samples.sqlite
       PREDICTION_REGISTRY_PATH: /models/registry.json
       PREDICTION_MAX_AGE_SECONDS: "5"
-      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:?set DT_RAM_SERVICE_TOKEN in .env}
     volumes:
       - prediction-data:/data
       - prediction-models:/models
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     depends_on:
       nats:
         condition: service_healthy
@@ -132,7 +135,7 @@ services:
       context: ../../services/prediction-service
     command: ["python", "-m", "prediction_app.collector", "--db", "/data/node_samples.sqlite", "listen", "--nats-url", "nats://nats:4222"]
     environment:
-      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:?set DT_RAM_SERVICE_TOKEN in .env}
     volumes:
       - prediction-data:/data
     depends_on:
@@ -144,9 +147,9 @@ services:
       context: ../../services/simulation-service
     environment:
       SIMULATION_SERVICE_PORT: 5002
-      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:?set DT_RAM_SERVICE_TOKEN in .env}
     ports:
-      - "5002:5002"
+      - "127.0.0.1:5002:5002"
 
   safety-service:
     build:
@@ -155,9 +158,9 @@ services:
     environment:
       SAFETY_SERVICE_PORT: 5003
       NATS_URL: nats://nats:4222
-      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:?set DT_RAM_SERVICE_TOKEN in .env}
     ports:
-      - "5003:5003"
+      - "127.0.0.1:5003:5003"
     depends_on:
       nats:
         condition: service_healthy
@@ -167,14 +170,14 @@ services:
       context: ../../services/experiment-service
     environment:
       EXPERIMENT_SERVICE_PORT: 3001
-      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:?set DT_RAM_SERVICE_TOKEN in .env}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_DB: dt_ram
       POSTGRES_USER: dt_user
-      POSTGRES_PASSWORD: dt_password_change_me
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -184,8 +187,8 @@ services:
       context: ../../services/api-gateway
     environment:
       API_GATEWAY_PORT: 3000
-      DT_RAM_API_KEY: ${DT_RAM_API_KEY:-development-api-key}
-      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:-development-service-token}
+      DT_RAM_API_KEY: ${DT_RAM_API_KEY:?set DT_RAM_API_KEY in .env}
+      DT_RAM_SERVICE_TOKEN: ${DT_RAM_SERVICE_TOKEN:?set DT_RAM_SERVICE_TOKEN in .env}
       EXPERIMENT_SERVICE_URL: http://experiment-service:3001
       INFRASTRUCTURE_CONTROLLER_URL: http://infrastructure-controller:8081
       TWIN_MANAGER_URL: http://twin-manager:8080
@@ -193,7 +196,7 @@ services:
       SIMULATION_SERVICE_URL: http://simulation-service:5002
       SAFETY_SERVICE_URL: http://safety-service:5003
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       experiment-service:
         condition: service_started
@@ -227,7 +230,7 @@ services:
     volumes:
       - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
 
 volumes:
   nats-data:
@@ -236,3 +239,4 @@ volumes:
   prediction-data:
   prediction-models:
   experiment-runs:
+  controller-audit:

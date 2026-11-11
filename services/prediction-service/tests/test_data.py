@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sqlite3
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -71,13 +72,38 @@ class DataTests(unittest.TestCase):
             self.assertFalse(asyncio.run(record_message(store, duplicate)))
             self.assertTrue(duplicate.acknowledged)
             conflict = Message(json.dumps(event(cpu=0.9)).encode())
-            with self.assertRaises(ValueError):
-                asyncio.run(record_message(store, conflict))
+            self.assertFalse(asyncio.run(record_message(store, conflict)))
             self.assertFalse(conflict.acknowledged)
+            self.assertTrue(conflict.terminated)
             invalid = Message(b"bad")
             self.assertFalse(asyncio.run(record_message(store, invalid)))
             self.assertTrue(invalid.terminated)
             store.close()
+
+    def test_store_outage_requests_bounded_redelivery(self):
+        class BrokenStore:
+            def add(self, sample):
+                raise sqlite3.OperationalError("local store unavailable")
+
+        class Message:
+            data = json.dumps(event()).encode()
+
+            def __init__(self, deliveries):
+                self.metadata = type("Metadata", (), {"num_delivered": deliveries})()
+                self.action = None
+
+            async def nak(self, delay):
+                self.action = ("nak", delay)
+
+            async def term(self):
+                self.action = ("term",)
+
+        first = Message(1)
+        self.assertFalse(asyncio.run(record_message(BrokenStore(), first)))
+        self.assertEqual(first.action, ("nak", 1))
+        exhausted = Message(3)
+        self.assertFalse(asyncio.run(record_message(BrokenStore(), exhausted)))
+        self.assertEqual(exhausted.action, ("term",))
 
     def test_replay_line_diagnostics(self):
         with tempfile.TemporaryDirectory() as temp:

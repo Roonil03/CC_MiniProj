@@ -1,6 +1,6 @@
 // Package fidelity implements the DT fidelity score:
 //
-//	F_t = 1 - sum(w_i * |x_physical - x_twin|) / sum(w_i * Z_i)
+//	F_t = 1 - sum(w_i * min(1, |x_physical - x_twin| / Z_i)) / sum(w_i)
 //
 // Autonomy mapping:
 // >0.95 autonomous, 0.90-0.95 restricted, 0.80-0.90 simulation-only, <0.80 disabled.
@@ -21,26 +21,34 @@ var (
 
 // Score compares a physical sample against the stored twin node.
 func Score(physicalCPU, physicalMem, physicalNetIn, physicalNetOut float64, twin model.NodeState) float64 {
-	twinCPU := 0.0
-	if twin.CPUCoreTotal > 0 {
-		twinCPU = twin.CPUUsedCores / twin.CPUCoreTotal
+	// Missing capacities make utilization unknowable; treating it as zero would
+	// award high fidelity to an uninitialized twin. Invalid samples fail closed.
+	if !unit(physicalCPU) || !unit(physicalMem) || !finiteNonnegative(physicalNetIn) || !finiteNonnegative(physicalNetOut) ||
+		!finitePositive(twin.CPUCoreTotal) || !finitePositive(twin.MemoryTotalMB) {
+		return 0
 	}
-	twinMem := 0.0
-	if twin.MemoryTotalMB > 0 {
-		twinMem = twin.MemoryUsedMB / twin.MemoryTotalMB
+	twinCPU := twin.CPUUsedCores / twin.CPUCoreTotal
+	twinMem := twin.MemoryUsedMB / twin.MemoryTotalMB
+	if !unit(twinCPU) || !unit(twinMem) || !finiteNonnegative(twin.NetworkInMbps) || !finiteNonnegative(twin.NetworkOutMbps) {
+		return 0
 	}
-	num := weights["cpu"]*math.Abs(physicalCPU-twinCPU) +
-		weights["memory"]*math.Abs(physicalMem-twinMem) +
-		weights["network_in"]*math.Abs(physicalNetIn-twin.NetworkInMbps) +
-		weights["network_out"]*math.Abs(physicalNetOut-twin.NetworkOutMbps)
-	den := weights["cpu"]*norms["cpu"] + weights["memory"]*norms["memory"] +
-		weights["network_in"]*norms["network_in"] + weights["network_out"]*norms["network_out"]
+	// Normalize each residual before weighting. A raw network-unit scale must
+	// never drown out a full CPU/memory mismatch.
+	num := weights["cpu"]*math.Min(1, math.Abs(physicalCPU-twinCPU)/norms["cpu"]) +
+		weights["memory"]*math.Min(1, math.Abs(physicalMem-twinMem)/norms["memory"]) +
+		weights["network_in"]*math.Min(1, math.Abs(physicalNetIn-twin.NetworkInMbps)/norms["network_in"]) +
+		weights["network_out"]*math.Min(1, math.Abs(physicalNetOut-twin.NetworkOutMbps)/norms["network_out"])
+	den := weights["cpu"] + weights["memory"] + weights["network_in"] + weights["network_out"]
 	if den <= 0 {
 		return 0
 	}
 	f := 1 - num/den
 	return math.Max(0, math.Min(1, f))
 }
+
+func unit(v float64) bool              { return !math.IsNaN(v) && !math.IsInf(v, 0) && v >= 0 && v <= 1 }
+func finiteNonnegative(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) && v >= 0 }
+func finitePositive(v float64) bool    { return finiteNonnegative(v) && v > 0 }
 
 // AutonomyLevel maps a fidelity score to a control mode.
 func AutonomyLevel(f float64, stale bool) string {

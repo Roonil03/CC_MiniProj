@@ -111,6 +111,7 @@ class TwinState:
         memory_total_mb: float = 16384.0,
         health: str = "healthy",
         timestamp: datetime | None = None,
+        stale: bool = False,
     ) -> NodeState:
         if not node_id:
             raise ValueError("node_id is required")
@@ -132,7 +133,7 @@ class TwinState:
             latency_to_cloud_ms=prev.latency_to_cloud_ms if prev else 0.0,
             health=health or "healthy",
             timestamp=ts,
-            stale=(_utcnow() - ts).total_seconds() > self._stale_after,
+            stale=(stale or ts > _utcnow() or (_utcnow() - ts).total_seconds() > self._stale_after),
         )
         self._nodes[node_id] = node
         return node

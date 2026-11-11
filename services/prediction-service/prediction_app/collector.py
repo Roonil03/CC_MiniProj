@@ -8,6 +8,7 @@ import hashlib
 import json
 import logging
 import math
+import sqlite3
 from collections import defaultdict
 from pathlib import Path
 
@@ -54,7 +55,22 @@ async def record_message(store: SampleStore, message) -> bool:
         logging.warning("invalid telemetry event: %s", exc)
         await message.term()
         return False
-    inserted = store.add(sample)  # SQLite commit precedes acknowledgement.
+    try:
+        inserted = store.add(sample)  # SQLite commit precedes acknowledgement.
+    except ValueError as exc:
+        # A duplicate timestamp with conflicting values cannot succeed on replay.
+        logging.warning("permanently conflicting telemetry event: %s", exc)
+        await message.term()
+        return False
+    except sqlite3.Error as exc:
+        # Local store outages are transient; bounded broker redelivery is safer
+        # than acknowledging data that was never committed.
+        logging.warning("telemetry store unavailable: %s", exc)
+        if getattr(message, "metadata", None) and message.metadata.num_delivered >= 3:
+            await message.term()
+        else:
+            await message.nak(delay=1)
+        return False
     await message.ack()
     return inserted
 

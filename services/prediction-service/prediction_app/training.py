@@ -36,11 +36,11 @@ def _git_info() -> dict[str, str | bool]:
     cmd = ["git", "-c", f"safe.directory={root}"]
     try:
         commit = subprocess.check_output(cmd + ["rev-parse", "HEAD"], cwd=root,
-                                         stderr=subprocess.DEVNULL, text=True).strip()
+                                         stderr=subprocess.DEVNULL, text=True, timeout=10).strip()
         dirty = bool(subprocess.check_output(cmd + ["status", "--porcelain"], cwd=root,
-                                             stderr=subprocess.DEVNULL, text=True).strip())
+                                             stderr=subprocess.DEVNULL, text=True, timeout=10).strip())
         return {"git_commit": commit, "working_tree_dirty": dirty}
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return {"git_commit": "unavailable", "working_tree_dirty": True}
 
 

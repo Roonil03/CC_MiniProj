@@ -1,20 +1,20 @@
 import { ApiProperty, PartialType, PickType } from '@nestjs/swagger';
-import { IsIn, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, Min } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { ExperimentStatus } from './experiment.model';
 
 export class CreateExperimentDto {
   @ApiProperty({ example: 'burst-workload-ppo' })
-  @IsString() @IsNotEmpty() name!: string;
+  @IsString() @IsNotEmpty() @MaxLength(200) name!: string;
 
-  @IsString() @IsNotEmpty() gitCommit!: string;
-  @IsString() @IsNotEmpty() datasetVersion!: string;
-  @IsString() @IsNotEmpty() modelVersion!: string;
+  @IsString() @IsNotEmpty() @MaxLength(128) gitCommit!: string;
+  @IsString() @IsNotEmpty() @MaxLength(128) datasetVersion!: string;
+  @IsString() @IsNotEmpty() @MaxLength(128) modelVersion!: string;
   @IsObject() configuration!: Record<string, unknown>;
-  @IsString() @IsNotEmpty() environment!: string;
-  @IsString() @IsNotEmpty() kubernetesVersion!: string;
+  @IsString() @IsNotEmpty() @MaxLength(128) environment!: string;
+  @IsString() @IsNotEmpty() @MaxLength(64) kubernetesVersion!: string;
   @IsObject() nodeTopology!: Record<string, unknown>;
-  @IsInt() @Min(0) randomSeed!: number;
-  @IsString() @IsNotEmpty() rlAlgorithm!: string;
+  @IsInt() @Min(0) @Max(2147483647) randomSeed!: number;
+  @IsString() @IsNotEmpty() @MaxLength(64) rlAlgorithm!: string;
   @IsObject() hyperparameters!: Record<string, unknown>;
 }
 

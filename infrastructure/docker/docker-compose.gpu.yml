@@ -1,0 +1,30 @@
+services:
+  prediction-service:
+    build:
+      args:
+        TORCH_CUDA_INDEX: https://download.pytorch.org/whl/cu126
+    environment:
+      DT_RAM_REQUIRE_CUDA: "1"
+    volumes:
+      - ../../:/workspace
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  rl-service:
+    build:
+      args:
+        TORCH_CUDA_INDEX: https://download.pytorch.org/whl/cu126
+    environment:
+      DT_RAM_REQUIRE_CUDA: "1"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
