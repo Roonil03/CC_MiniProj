@@ -117,7 +117,10 @@ the service token.
 `predicted`, `dt_fidelity`, `destination_free_cpu`, `destination_healthy`,
 `source_healthy`, and optional `dry_run`. Predicted fields include CPU,
 latency, SLO violation probability, and prediction confidence. Audit records
-are process-local in the current implementation.
+are bounded to 10,000 entries. The local Compose deployment sets
+`DT_RAM_AUDIT_PATH` on a persistent volume so decision IDs, policy versions,
+inputs and verdicts survive controller restarts. Without that variable the
+standalone default remains process-local.
 
 ### Twin manager (default port 8080)
 
@@ -153,6 +156,16 @@ for individual unavailable nodes or metrics.
 `service_mem_mb`, `predicted`, and `dt_fidelity`. Its `results` array reports
 action type, predicted CPU/memory/latency, SLO violation probability,
 migration cost and duration, feasibility, notes, confidence, and fidelity.
+Each node must supply either utilization `cpu`/`memory` or paired raw
+`cpu_used`/`cpu_total` and `memory_used_mb`/`memory_total_mb`. Missing
+measurements, including network-in and network-out, are rejected with 422. A missing, stale, or future timestamp
+marks state stale, so placement is infeasible. Migration requires a known
+source and positive bandwidth. Optional `predicted.forecasts` entries with
+`node_id`, `metric` (`cpu` or `memory`), `value`, `horizon_seconds`,
+`timestamp`, and `source` are applied only when their node, requested horizon
+(default five seconds), and five-second freshness match. The response lists
+`applied_forecasts` with provenance. The default no-forecast path remains
+unchanged.
 Simulation proposes outcomes; it does not actuate.
 
 ### Safety service (default port 5003)

@@ -26,9 +26,15 @@ from app.simulator import evaluate_candidates  # noqa: E402
 from app.twin import TwinState  # noqa: E402
 from rl_app.env import EdgeResourceEnv, EnvConfig  # noqa: E402
 from rl_app.policies import git_sha, policy_record  # noqa: E402
+from rl_app.ppo import evaluate_comparators, evaluate_policy  # noqa: E402
 
 
-def workflow(seed: int, train: bool, timesteps: int, episodes: int) -> dict:
+def workflow(seed: int, train: bool, timesteps: int, episodes: int, domain_randomization: bool = False,
+             multi_objective: bool = False) -> dict:
+    if seed < 0:
+        raise ValueError("seed must be non-negative")
+    if timesteps < 1 or episodes < 1:
+        raise ValueError("timesteps and episodes must be positive")
     np.random.seed(seed)
     twin = TwinState(stale_after_seconds=5.0)
     twin.apply_telemetry("edge-a1", 0.70, 0.55, 210.0, 180.0)
@@ -73,7 +79,12 @@ def workflow(seed: int, train: bool, timesteps: int, episodes: int) -> dict:
     output: dict = {
         "git_commit": git_sha(),
         "seed": seed,
-        "config": {"algorithm": "PPO", "training": train, "timesteps": timesteps},
+        "config": {
+            "algorithm": "PPO",
+            "training": train,
+            "timesteps": timesteps,
+            "domain_randomization": domain_randomization,
+        },
         "fidelity": scores,
         "simulations": [
             {
@@ -92,17 +103,48 @@ def workflow(seed: int, train: bool, timesteps: int, episodes: int) -> dict:
         "decisions": decisions,
         "actuation": {"allowed": False, "controller": "infrastructure-controller", "dry_run": True},
     }
+    held_out_seeds = [seed + 100_000 + index for index in range(episodes)]
+    eval_config = EnvConfig(
+        num_nodes=3,
+        horizon=4,
+        seed=seed + 100_000,
+        domain_randomization=domain_randomization,
+    )
+    output["evaluation"] = {
+        "split": "held_out_episode_seeds",
+        "seeds": held_out_seeds,
+        "comparators": evaluate_comparators(EdgeResourceEnv(eval_config), held_out_seeds, multi_objective),
+        "multi_objective": multi_objective,
+    }
     if train:
-        from rl_app.ppo import PPOConfig, make_model, rollout
+        from rl_app.ppo import PPOConfig, make_model
 
         ppo_config = PPOConfig(total_timesteps=timesteps, seed=seed)
-        model = make_model(EnvConfig(num_nodes=3, horizon=4, seed=seed), ppo_config)
+        model = make_model(
+            EnvConfig(num_nodes=3, horizon=4, seed=seed, domain_randomization=domain_randomization),
+            ppo_config,
+        )
         model.learn(total_timesteps=timesteps)
+        import gymnasium
+        import stable_baselines3
+        import torch
+        held_out_env = EdgeResourceEnv(eval_config)
+        output["evaluation"]["comparators"]["ppo"] = evaluate_policy(
+            lambda obs, _info, _rng: int(model.predict(obs, deterministic=True)[0]),
+            held_out_env,
+            held_out_seeds,
+            multi_objective,
+        )
         output["ppo"] = {
-            "rollout": rollout(model, EdgeResourceEnv(EnvConfig(num_nodes=3, horizon=4, seed=seed + 1)), episodes),
+            "evaluation_split": "held_out_episode_seeds",
+            "requested_steps": timesteps,
+            "actual_steps": model.num_timesteps,
+            "versions": {"gymnasium": gymnasium.__version__, "stable_baselines3": stable_baselines3.__version__,
+                         "torch": torch.__version__},
             "policy": policy_record(
                 "ppo-edge-migration", "v0.1.0", f"synthetic-seed-{seed}",
-                ppo_config.as_dict(), {"note": "simulation-only baseline"},
+                {**ppo_config.as_dict(), "domain_randomization": domain_randomization},
+                {"held_out_evaluation": output["evaluation"]["comparators"]["ppo"]},
             ),
         }
     return output
@@ -114,9 +156,16 @@ def main() -> None:
     parser.add_argument("--train", action="store_true", help="run opt-in PPO training in simulation")
     parser.add_argument("--timesteps", type=int, default=2048)
     parser.add_argument("--episodes", type=int, default=2)
+    parser.add_argument(
+        "--domain-randomization",
+        action="store_true",
+        help="randomize workload dynamics by episode for robustness experiments",
+    )
     parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument("--multi-objective", action="store_true", help="report separate simulation-only objective metrics and reward spread")
     args = parser.parse_args()
-    result = workflow(args.seed, args.train, args.timesteps, args.episodes)
+    result = workflow(args.seed, args.train, args.timesteps, args.episodes,
+                      args.domain_randomization, args.multi_objective)
     payload = json.dumps(result, indent=2, sort_keys=True, default=str)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

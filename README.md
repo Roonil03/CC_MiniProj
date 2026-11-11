@@ -17,4 +17,16 @@ The system uses a Node.js API gateway and experiment registry, Go telemetry and 
 - [Local deployment and infrastructure guide](infrastructure/README.md)
 - [Experiment protocol](docs/experiments.md)
 
-For local setup, copy `.env.example` to `.env`, set `DT_RAM_API_KEY` and `DT_RAM_SERVICE_TOKEN`, then follow the infrastructure guide. The gateway serves its interactive API docs at `/docs` on port `3000` by default.
+For local setup, copy `.env.example` to `.env`, set `DT_RAM_API_KEY`, `DT_RAM_SERVICE_TOKEN`, and `POSTGRES_PASSWORD`, then follow the infrastructure guide. The gateway serves its interactive API docs at `/docs` on port `3000` by default.
+
+## Capability status
+
+| Capability | Status | Boundary |
+| --- | --- | --- |
+| Offline forecasting sweep and plots | Implemented | Recorded or synthetic local telemetry only |
+| Synthetic twin, counterfactual simulation and PPO evaluation | Simulated | Results are not live-cluster evidence |
+| Safety decision publication and Go controller audit | Shadow-only | Physical Kubernetes actuation is disabled |
+| Autonomous production migration | Planned | No deployment claim |
+
+Windows users can run the offline, project-local [model runner](scripts/run_dt_models.ps1).
+See [the experiment guide](docs/experiments.md) for its inputs, archive and limits.

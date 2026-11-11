@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from statistics import mean, pstdev
 from typing import Callable
 
@@ -113,6 +114,11 @@ def fit_neural(kind: str, train, validation, *, history_steps: int,
     import copy
     import torch
 
+    require_cuda = os.getenv("DT_RAM_REQUIRE_CUDA") == "1"
+    if require_cuda and not torch.cuda.is_available():
+        raise RuntimeError("CUDA GPU required for this run but PyTorch cannot access it")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     if not train or not validation:
         raise ValueError("training and validation windows are required")
     torch.manual_seed(seed)
@@ -121,10 +127,10 @@ def fit_neural(kind: str, train, validation, *, history_steps: int,
     def tensorize(windows):
         x = torch.tensor([scale.transform(w.history) for w in windows], dtype=torch.float32)
         y = torch.tensor([scale.transform(w.targets) for w in windows], dtype=torch.float32)
-        return x, y
+        return x.to(device), y.to(device)
     x_train, y_train = tensorize(train)
     x_val, y_val = tensorize(validation)
-    network = neural_network(kind, history_steps, len(horizons), hidden)
+    network = neural_network(kind, history_steps, len(horizons), hidden).to(device)
     optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
     best_loss = float("inf")
     best_state = None
@@ -162,6 +168,7 @@ def fit_neural(kind: str, train, validation, *, history_steps: int,
             break
     network.load_state_dict(best_state)
     return network, scale, {"validation_mse_scaled": best_loss, "selected_epoch": best_epoch,
+                            "device": str(device), "cuda_name": torch.cuda.get_device_name(0) if device.type == "cuda" else None,
                             "parameter_count": sum(p.numel() for p in network.parameters())}
 
 
@@ -169,5 +176,6 @@ def predict_neural(network, scale: Scale, history: tuple[float, ...]) -> list[fl
     import torch
     network.eval()
     with torch.no_grad():
-        x = torch.tensor([scale.transform(history)], dtype=torch.float32)
+        x = torch.tensor([scale.transform(history)], dtype=torch.float32,
+                         device=next(network.parameters()).device)
         return scale.inverse(network(x)[0].tolist())

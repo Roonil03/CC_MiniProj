@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import json
 from pathlib import Path
 
@@ -66,8 +67,12 @@ class Registry:
         if content_hash != record.get("artifact_hash"):
             raise ValueError("artifact hash mismatch")
         config = record["hyperparameters"]
+        require_cuda = os.getenv("DT_RAM_REQUIRE_CUDA") == "1"
+        if require_cuda and not torch.cuda.is_available():
+            raise RuntimeError("CUDA GPU required for prediction but unavailable")
+        device = torch.device("cuda" if require_cuda else "cpu")
         network = neural_network(record["kind"], config["history_steps"],
-                                 len(config["horizons_seconds"]))
+                                 len(config["horizons_seconds"])).to(device)
         network.load_state_dict(torch.load(artifact, map_location="cpu", weights_only=True))
         scale = Scale(**record["scale"])
         return network, scale

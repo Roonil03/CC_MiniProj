@@ -125,9 +125,11 @@ def _kubectl_json(args: list[str], kubeconfig: str | None) -> dict:
         command.extend(["--kubeconfig", kubeconfig])
     command.extend(args)
     try:
-        completed = subprocess.run(command, check=False, capture_output=True, text=True)
+        completed = subprocess.run(command, check=False, capture_output=True, text=True, timeout=10)
     except FileNotFoundError as exc:
         raise RuntimeError("kubectl was not found; install it and ensure it is on PATH") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("kubectl read timed out after 10 seconds") from exc
     if completed.returncode:
         detail = completed.stderr.strip() or completed.stdout.strip() or "unknown kubectl error"
         raise RuntimeError(f"{' '.join(command)} failed: {detail}")
@@ -228,9 +230,12 @@ def _current_context(kubeconfig: str | None) -> str:
             check=False,
             capture_output=True,
             text=True,
+            timeout=10,
         )
     except FileNotFoundError as exc:
         raise RuntimeError("kubectl was not found; install it and ensure it is on PATH") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("kubectl context lookup timed out after 10 seconds") from exc
     return context_response.stdout.strip() if context_response.returncode == 0 else "current context"
 
 

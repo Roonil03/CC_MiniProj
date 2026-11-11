@@ -61,8 +61,9 @@ def git_commit() -> str:
             cwd=REPO_ROOT,
             stderr=subprocess.DEVNULL,
             text=True,
+            timeout=10,
         ).strip()
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return "unavailable"
 
 
@@ -207,9 +208,15 @@ def load_or_create_state(run_dir: Path, config: dict[str, Any], fresh: bool, log
         logger.info("Resuming run_id=%s", state.get("run_id"))
         return state
     if path.exists() and fresh:
-        backup = run_dir / f"{STATE_FILE}.{int(time.time())}.bak"
-        shutil.copy2(path, backup)
-        logger.info("Backed up prior run state to %s", backup)
+        for handler in list(logger.handlers):
+            handler.close()
+            logger.removeHandler(handler)
+        backup_dir = run_dir / "previous" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        backup_dir.mkdir(parents=True)
+        for old in list(run_dir.iterdir()):
+            if old.name != "previous":
+                shutil.move(str(old), str(backup_dir / old.name))
+        logger.info("Moved prior run outputs to %s", backup_dir)
     state = new_state(config)
     write_json(path, state)
     return state
@@ -285,7 +292,10 @@ def run_job(args: argparse.Namespace, run_dir: Path, state: dict[str, Any], reco
     model, metric = job["model"], job["metric"]
     max_attempts = args.max_attempts
     result_path = run_dir / "results" / f"{key}.json"
-    for attempt in range(job.get("attempts", 0) + 1, max_attempts + 1):
+    # Each invocation gets a bounded retry budget; attempts remains cumulative
+    # so a failed run can be resumed without requiring --fresh.
+    previous_attempts = int(job.get("attempts", 0))
+    for attempt in range(previous_attempts + 1, previous_attempts + max_attempts + 1):
         job.update({"status": "running", "attempts": attempt, "started_at": utc_now(), "error": None})
         save_state(run_dir, state)
         recorder.emit("job_started", job=key, model=model, metric=metric, attempt=attempt)
@@ -324,9 +334,10 @@ def run_job(args: argparse.Namespace, run_dir: Path, state: dict[str, Any], reco
             save_state(run_dir, state)
             recorder.emit("job_failed", job=key, model=model, metric=metric, attempt=attempt,
                           duration_seconds=round(duration, 6), error=message)
-            logger.error("Job %s failed on attempt %d/%d", key, attempt, max_attempts, exc_info=True)
-            if attempt < max_attempts:
-                delay = args.retry_delay_seconds * (2 ** (attempt - 1))
+            logger.error("Job %s failed on attempt %d (this invocation %d/%d)",
+                         key, attempt, attempt - previous_attempts, max_attempts, exc_info=True)
+            if attempt - previous_attempts < max_attempts:
+                delay = args.retry_delay_seconds * (2 ** (attempt - previous_attempts - 1))
                 recorder.emit("retry_scheduled", job=key, attempt=attempt, delay_seconds=delay)
                 time.sleep(delay)
             elif args.fail_fast:
@@ -411,7 +422,9 @@ def plot_results(run_dir: Path, state: dict[str, Any], recorder: EventRecorder, 
     if results:
         labels = [f"{r.get('kind')}\n{r.get('metric')}" for r in results]
         latency = [float(r.get("inference_latency_ms", {}).get("test_mean", 0.0)) for r in results]
-        artifact = [int(r.get("weights_file") and (run_dir / "models" / r["weights_file"]).stat().st_size or 0) for r in results]
+        artifact = [int((run_dir / "models" / r["weights_file"]).stat().st_size)
+                    if r.get("weights_file") and (run_dir / "models" / r["weights_file"]).is_file()
+                    else 0 for r in results]
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
         axes[0].bar(labels, latency)
         axes[0].set_title("Mean test inference latency")
@@ -472,7 +485,9 @@ def package_run(run_dir: Path) -> Path:
         archive.unlink()
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
         for path in sorted(run_dir.rglob("*")):
-            if path.is_file():
+            if "previous" in path.relative_to(run_dir).parts:
+                continue
+            if path.is_file() and path.suffix.lower() not in {".env", ".pem", ".key"}:
                 bundle.write(path, path.relative_to(run_dir).as_posix())
     return archive
 
@@ -511,6 +526,8 @@ def main(argv: list[str] | None = None) -> int:
 
     config = make_config(args)
     state = load_or_create_state(run_dir, config, args.fresh, logger)
+    if args.fresh:
+        logger = configure_logging(run_dir)
     recorder = EventRecorder(run_dir, logger)
     recorder.emit("run_started", run_id=state["run_id"], config=config, system=system_snapshot())
     write_json(run_dir / "system.json", system_snapshot())

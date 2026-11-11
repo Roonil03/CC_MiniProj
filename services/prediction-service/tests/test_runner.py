@@ -2,18 +2,36 @@ import json
 import logging
 import tempfile
 import unittest
+from argparse import Namespace
 from pathlib import Path
+from unittest.mock import patch
 
 from prediction_app.scripts.run_all_models import (
     EventRecorder,
     format_duration,
     new_state,
     package_run,
+    run_job,
     write_estimate,
 )
 
 
 class RunnerTests(unittest.TestCase):
+    def test_failed_job_can_retry_on_later_invocation(self):
+        config = {"models": ["persistence"], "metrics": ["cpu"], "epochs": 1}
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir = Path(temp)
+            state = new_state(config)
+            state["jobs"]["persistence__cpu"].update(status="failed", attempts=2)
+            recorder = EventRecorder(run_dir, logging.getLogger("runner-resume-test"))
+            args = Namespace(max_attempts=1, retry_delay_seconds=0, fail_fast=False,
+                             db="unused", history_steps=8, horizons=[1], period_seconds=1,
+                             seed=42, epochs=1, source_label="fixture")
+            with patch("prediction_app.scripts.run_all_models.run_training", return_value={"model_id": "fixture", "metrics": {}}):
+                run_job(args, run_dir, state, recorder, logging.getLogger("runner-resume-test"), "persistence__cpu")
+            self.assertEqual(state["jobs"]["persistence__cpu"]["attempts"], 3)
+            self.assertEqual(state["jobs"]["persistence__cpu"]["status"], "completed")
+
     def test_state_estimate_and_package_are_restart_safe(self):
         config = {
             "models": ["persistence", "gru"],

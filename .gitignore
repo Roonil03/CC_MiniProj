@@ -60,6 +60,7 @@ id_rsa*
 # (Note: Use virtual environments and pip3 for package installation)
 # ------------------------------------------------------------------------------
 # Virtual environments
+.venv-dt-models/
 venv/
 venv*/
 .venv/
@@ -179,6 +180,8 @@ datasets/processed/*
 experiments/runs/*
 !experiments/runs/.gitkeep
 !experiments/runs/README.md
+experiments/runs/*.zip
+services/prediction-service/data/*.sqlite*
 
 # General logs & databases
 *.log

@@ -12,6 +12,8 @@ COPY services/rl-service/requirements.txt ./
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+ARG TORCH_CUDA_INDEX=
+RUN if [ -n "$TORCH_CUDA_INDEX" ]; then /opt/venv/bin/pip install --no-cache-dir --force-reinstall torch==2.5.1 --index-url "$TORCH_CUDA_INDEX"; fi
 
 COPY services/rl-service/rl_app ./rl_app
 COPY services/rl-service/cli.py ./cli.py
