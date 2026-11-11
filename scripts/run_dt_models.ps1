@@ -89,7 +89,7 @@ function Invoke-Local([string]$label, [string]$exe, [string[]]$arguments, [strin
 try {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw "Docker CLI is required; install Docker Desktop with Linux containers and GPU support first" }
     if (-not (Test-Path -LiteralPath (Join-Path $repo ".env"))) { throw "Local .env is required for Compose; copy .env.example and set unique credentials" }
-    $composeArgs = @("compose", "--env-file", (Join-Path $repo ".env"),
+    $composeArgs = @("compose", "--progress", "plain", "--env-file", (Join-Path $repo ".env"),
                      "-f", $compose, "-f", $composeGpu)
     if ((Invoke-Local "docker-preflight" "docker" ($composeArgs + @("config", "--quiet"))) -ne 0) { throw "GPU Compose configuration is invalid" }
     if ((Invoke-Local "docker-start" "docker" ($composeArgs + @("up", "-d", "--build", "--pull", "missing"))) -ne 0) { throw "Could not pull missing images, build images, and start local Docker services" }
