@@ -69,9 +69,18 @@ function Invoke-Local([string]$label, [string]$exe, [string[]]$arguments, [strin
     Log "START $label executable=$exe arguments=$($arguments -join ' ')"
     $started = Get-Date
     Push-Location $workingDirectory
-    try { & $exe @arguments 2>&1 | ForEach-Object { Log "$label $_" } }
-    finally { Pop-Location }
-    $code = $LASTEXITCODE
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell can turn native stderr progress into terminating
+        # ErrorRecords when the caller uses Stop. Keep the process exit code as
+        # the authority and capture both output streams into the run log.
+        $ErrorActionPreference = "Continue"
+        & $exe @arguments 2>&1 | ForEach-Object { Log "$label $_" }
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        Pop-Location
+    }
     $elapsed = ((Get-Date) - $started).TotalSeconds
     Log "END $label exit=$code seconds=$elapsed"
     return $code
@@ -83,7 +92,7 @@ try {
     $composeArgs = @("compose", "--env-file", (Join-Path $repo ".env"),
                      "--project-directory", $repo, "-f", $compose, "-f", $composeGpu)
     if ((Invoke-Local "docker-preflight" "docker" ($composeArgs + @("config", "--quiet"))) -ne 0) { throw "GPU Compose configuration is invalid" }
-    if ((Invoke-Local "docker-start" "docker" ($composeArgs + @("up", "-d", "--build"))) -ne 0) { throw "Could not build/start local Docker services" }
+    if ((Invoke-Local "docker-start" "docker" ($composeArgs + @("up", "-d", "--build", "--pull", "missing"))) -ne 0) { throw "Could not pull missing images, build images, and start local Docker services" }
     if ((Invoke-Local "docker-gpu-check" "docker" ($composeArgs + @("exec", "-T", "prediction-service", "python", "-c", "import torch; assert torch.cuda.is_available(), 'CUDA GPU unavailable in prediction container'; print(torch.cuda.get_device_name(0))"))) -ne 0) { throw "Prediction container cannot access CUDA GPU" }
     if (-not (Test-Path -LiteralPath $python)) {
         $basePython = (Get-Command py -ErrorAction SilentlyContinue)
