@@ -41,7 +41,8 @@ if ($TelemetryExport) {
 }
 if ((Test-Path -LiteralPath $run) -and $Fresh) { throw "Fresh requires a new RunId so previous runs stay intact" }
 if ($WhatIf) {
-    Write-Output "WHATIF prerequisites: docker_cli=$([bool](Get-Command docker -ErrorAction SilentlyContinue)); python_launcher=$([bool](Get-Command py,python -ErrorAction SilentlyContinue)); env_file=$(Test-Path -LiteralPath (Join-Path $repo '.env')); local_export=$([bool]$input)"
+    $pythonAvailable = [bool](Get-Command py, python, python3 -ErrorAction SilentlyContinue)
+    Write-Output "WHATIF prerequisites: docker_cli=$([bool](Get-Command docker -ErrorAction SilentlyContinue)); python_launcher=$pythonAvailable; env_file=$(Test-Path -LiteralPath (Join-Path $repo '.env')); local_export=$([bool]$input)"
     Write-Output "WHATIF: run=$run; source=$(if ($input) { 'local JSONL' } else { 'synthetic' }); models=$($Models -join ','); metrics=$($Metrics -join ','); scenarios=$($Scenarios -join ','); seeds=$($Seeds -join ','); policies=$($Policies -join ',')"
     Write-Output "WHATIF: check Docker Desktop/NVIDIA GPU; build and start local Compose stack with GPU override; create project venv and CUDA PyTorch; prepare offline SQLite; estimate; run existing prediction CLI and optional PPO CLI; synthetic scenarios=$RunAdversarialScenarios; zip outputs"
     exit 0
@@ -77,8 +78,16 @@ try {
     if ((Invoke-Local "docker-gpu-check" "docker" ($composeArgs + @("exec", "-T", "prediction-service", "python", "-c", "import torch; assert torch.cuda.is_available(), 'CUDA GPU unavailable in prediction container'; print(torch.cuda.get_device_name(0))"))) -ne 0) { throw "Prediction container cannot access CUDA GPU" }
     if (-not (Test-Path -LiteralPath $python)) {
         $basePython = (Get-Command py -ErrorAction SilentlyContinue)
-        if ($basePython) { & py -3.11 -m venv $venv }
-        else { & python -m venv $venv }
+        if ($basePython) {
+            & $basePython.Source -3.11 -m venv $venv
+        } else {
+            $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+            if (-not $pythonCommand) { $pythonCommand = Get-Command python3 -ErrorAction SilentlyContinue }
+            if (-not $pythonCommand) { throw "Python 3.11 is required; install it and expose py, python, or python3 on PATH" }
+            $pythonVersion = & $pythonCommand.Source --version 2>&1 | Out-String
+            if ($pythonVersion -notmatch 'Python 3\.11\.') { throw "Python 3.11 is required to create this virtual environment; found $($pythonVersion.Trim())" }
+            & $pythonCommand.Source -m venv $venv
+        }
         if ($LASTEXITCODE -ne 0) { throw "Could not create project-local virtual environment" }
     }
     $installed = Join-Path $venv "dt-requirements.sha256"
