@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -52,15 +53,16 @@ func main() {
 		// Ephemeral consumer replays retained state on restart because the store is in memory.
 		_, err = js.Subscribe(cfg.SubscribeSubject, func(m *nats.Msg) {
 			var ev struct {
+				EventType string    `json:"event_type"`
 				NodeID    string    `json:"node_id"`
 				Timestamp time.Time `json:"timestamp"`
 				Metrics   struct {
-					CPUTotal    float64 `json:"cpu_total"`
-					MemoryTotal float64 `json:"memory_total_mb"`
-					CPU         float64 `json:"cpu"`
-					Memory      float64 `json:"memory"`
-					NetIn       float64 `json:"network_in"`
-					NetOut      float64 `json:"network_out"`
+					CPUTotal    *float64 `json:"cpu_total"`
+					MemoryTotal *float64 `json:"memory_total_mb"`
+					CPU         *float64 `json:"cpu"`
+					Memory      *float64 `json:"memory"`
+					NetIn       *float64 `json:"network_in"`
+					NetOut      *float64 `json:"network_out"`
 				} `json:"metrics"`
 			}
 			if err := json.Unmarshal(m.Data, &ev); err != nil {
@@ -68,7 +70,7 @@ func main() {
 				_ = m.Term()
 				return
 			}
-			if ev.NodeID == "" || ev.Timestamp.IsZero() {
+			if ev.EventType != "NODE_METRIC_UPDATED" || ev.NodeID == "" || ev.Timestamp.IsZero() {
 				_ = m.Term()
 				return
 			}
@@ -78,7 +80,16 @@ func main() {
 				NetworkInMbps: ev.Metrics.NetIn, NetworkOutMbps: ev.Metrics.NetOut, Timestamp: ev.Timestamp,
 			}); err != nil {
 				log.Printf("sync reject: %v", err)
-				_ = m.Term()
+				if strings.Contains(err.Error(), "newer than stored state") || strings.Contains(err.Error(), "must be newer") || strings.Contains(err.Error(), "newer than persisted state") {
+					// Replay and out-of-order samples are permanent; terminate to avoid
+					// retry loops while preserving the newer twin state.
+					_ = m.Term()
+				} else if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "must be in") || strings.Contains(err.Error(), "finite and nonnegative") || strings.Contains(err.Error(), "future") {
+					_ = m.Term()
+				} else {
+					// Store/backend failures are retryable; do not drop telemetry.
+					_ = m.NakWithDelay(time.Second)
+				}
 				return
 			}
 			_ = m.Ack()

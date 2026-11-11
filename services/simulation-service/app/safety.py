@@ -41,8 +41,11 @@ class SafetyGate:
     def evaluate(self, request: dict[str, Any]) -> Verdict:
         reasons: list[str] = []
         action = request.get("action", {})
-        atype = str(action.get("type", "NOOP")).upper()
+        atype = str(action.get("type", "")).upper()
         predicted = request.get("predicted", {})
+
+        if atype not in {"NOOP", "MIGRATE", "PLACE", "SCALE", "RESOURCE_ADJUST"}:
+            return Verdict(False, [f"unsupported action {atype}"])
 
         if atype == "NOOP":
             return Verdict(True, ["noop always safe"])
@@ -51,7 +54,7 @@ class SafetyGate:
             fidelity = float(request.get("dt_fidelity", 0.0))
         except (TypeError, ValueError):
             fidelity = float("nan")
-        if not math.isfinite(fidelity) or fidelity <= self.config.min_fidelity:
+        if not math.isfinite(fidelity) or fidelity < 0 or fidelity > 1 or fidelity <= self.config.min_fidelity:
             reasons.append(
                 f"dt fidelity {fidelity:.3f} below minimum {self.config.min_fidelity:.3f}: disable RL actuation"
             )
@@ -59,7 +62,7 @@ class SafetyGate:
             conf = float(predicted.get("prediction_confidence", 0.0) or 0.0)
         except (TypeError, ValueError):
             conf = float("nan")
-        if not math.isfinite(conf) or conf < self.config.min_confidence:
+        if not math.isfinite(conf) or conf < 0 or conf > 1 or conf < self.config.min_confidence:
             reasons.append(
                 f"prediction confidence {conf:.3f} below minimum {self.config.min_confidence:.3f}"
             )

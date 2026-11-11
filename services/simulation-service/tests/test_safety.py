@@ -45,6 +45,15 @@ class TestSafetyGate(unittest.TestCase):
         gate.record_migration("edge-a1")
         self.assertFalse(gate.evaluate(_req()).approved)
 
+    def test_unknown_action_and_out_of_range_evidence_fail_closed(self):
+        gate = SafetyGate(GateConfig())
+        self.assertFalse(gate.evaluate(_req(action={"type": "DELETE_NODE"})).approved)
+        self.assertFalse(gate.evaluate(_req(action={})).approved)
+        self.assertFalse(gate.evaluate(_req(dt_fidelity=1.1)).approved)
+        req = _req()
+        req["predicted"] = {"slo_violation_probability": 0.01, "prediction_confidence": 1.1}
+        self.assertFalse(gate.evaluate(req).approved)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,20 @@ func TestScorePerfectMatchIsOne(t *testing.T) {
 	require.InDelta(t, 1.0, f, 1e-9)
 }
 
+func TestScoreFailsClosedForUnknownCapacityOrInvalidSample(t *testing.T) {
+	twin := model.NodeState{CPUCoreTotal: 0, MemoryTotalMB: 1024, NetworkInMbps: 0, NetworkOutMbps: 0}
+	require.Zero(t, fidelity.Score(0, 0, 0, 0, twin))
+	twin.CPUCoreTotal = 4
+	require.Zero(t, fidelity.Score(1.1, 0, 0, 0, twin))
+}
+
+func TestFullResourceMismatchCannotBeHiddenByMatchingNetwork(t *testing.T) {
+	twin := model.NodeState{CPUCoreTotal: 8, CPUUsedCores: 8, MemoryTotalMB: 1024, MemoryUsedMB: 1024,
+		NetworkInMbps: 100, NetworkOutMbps: 100}
+	f := fidelity.Score(0, 0, 100, 100, twin)
+	require.Less(t, f, 0.8)
+}
+
 func TestAutonomyLevels(t *testing.T) {
 	require.Equal(t, "autonomous", fidelity.AutonomyLevel(0.97, false))
 	require.Equal(t, "restricted", fidelity.AutonomyLevel(0.92, false))

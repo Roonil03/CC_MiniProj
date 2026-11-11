@@ -14,12 +14,12 @@ import (
 func TestApplyTelemetryRejectsStaleOldTimestamp(t *testing.T) {
 	st := store.NewMemory()
 	e := twinsync.New(st, 5*time.Second)
-	_, err := e.ApplyTelemetry(model.TelemetryIngest{NodeID: "", CPUUtil: 0.5, MemoryUtil: 0.5})
+	_, err := e.ApplyTelemetry(model.TelemetryIngest{NodeID: "", CPUUtil: ptr(0.5), MemoryUtil: ptr(0.5)})
 	require.Error(t, err)
 
 	n, err := e.ApplyTelemetry(model.TelemetryIngest{
-		NodeID: "edge-a1", CPUUtil: 0.5, MemoryUtil: 0.25,
-		NetworkInMbps: 10, Timestamp: time.Now().UTC().Add(-time.Hour),
+		NodeID: "edge-a1", CPUUtil: ptr(0.5), MemoryUtil: ptr(0.25),
+		NetworkInMbps: ptr(10), Timestamp: time.Now().UTC().Add(-time.Hour),
 	})
 	require.NoError(t, err)
 	require.True(t, n.Stale)
@@ -28,6 +28,8 @@ func TestApplyTelemetryRejectsStaleOldTimestamp(t *testing.T) {
 func TestApplyTelemetryRejectsOutOfRange(t *testing.T) {
 	st := store.NewMemory()
 	e := twinsync.New(st, 5*time.Second)
-	_, err := e.ApplyTelemetry(model.TelemetryIngest{NodeID: "edge-a1", CPUUtil: 2.0, MemoryUtil: 0.1})
+	_, err := e.ApplyTelemetry(model.TelemetryIngest{NodeID: "edge-a1", CPUUtil: ptr(2.0), MemoryUtil: ptr(0.1)})
 	require.Error(t, err)
 }
+
+func ptr(v float64) *float64 { return &v }

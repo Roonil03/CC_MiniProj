@@ -5,6 +5,7 @@ package publisher
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
@@ -61,8 +62,27 @@ func (p *NATSPublisher) Publish(ev model.NodeMetricEvent) error {
 	if err != nil {
 		return err
 	}
-	_, err = p.js.Publish(p.subject, b)
-	return err
+	// JetStream message IDs make a retry after an ambiguous publish response
+	// idempotent within the stream's duplicate window.
+	msg := &nats.Msg{Subject: p.subject, Data: b}
+	msg.Header.Set(nats.MsgIdHdr, fmt.Sprintf("%s:%s", ev.NodeID, ev.Timestamp.UTC().Format(time.RFC3339Nano)))
+	return publishWithRetry(func() error {
+		_, publishErr := p.js.PublishMsg(msg)
+		return publishErr
+	})
+}
+
+func publishWithRetry(publish func() error) error {
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		if err = publish(); err == nil {
+			return nil
+		}
+		if attempt < 2 {
+			time.Sleep(time.Duration(attempt+1) * 50 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("JetStream publish failed after 3 attempts: %w", err)
 }
 
 func (p *NATSPublisher) Close() error {

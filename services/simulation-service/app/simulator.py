@@ -72,6 +72,7 @@ def simulate_action(
     service_rate: float = 100.0,
     state_mb: float = 100.0,
     bandwidth_mbps: float = 200.0,
+    forecast_overrides: dict[tuple[str, str], float] | None = None,
 ) -> SimResult:
     """Simulate one candidate action against current twin state."""
     notes: list[str] = []
@@ -82,20 +83,36 @@ def simulate_action(
     if atype == "NOOP":
         if src is None:
             return SimResult(atype, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, False, ["unknown source node"])
+        if src.stale:
+            return SimResult(atype, src.cpu_util, src.mem_util, 0.0, 1.0, 0.0, 0.0, False, ["source state is stale"])
         lat = _latency_model(src.cpu_util)
         return SimResult(atype, src.cpu_util, src.mem_util, lat, _slo_prob(lat, 50.0), 0.0, 0.0, True, ["baseline"])
 
     if atype in ("MIGRATE", "PLACE"):
+        if atype == "MIGRATE" and src is None:
+            return SimResult(atype, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, False, ["unknown migration source"])
         if dst is None:
             return SimResult(atype, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, False, ["unknown destination"])
         if dst.health != "healthy":
             notes.append("destination unhealthy")
             return SimResult(atype, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, False, notes)
-        new_cpu = dst.cpu_util + service_cpu / max(dst.cpu_total, 1e-9)
-        new_mem = dst.mem_util + service_mem_mb / max(dst.memory_total_mb, 1e-9)
+        if dst.stale:
+            return SimResult(atype, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, False, ["destination state is stale"])
+        if src is not None and src.stale:
+            return SimResult(atype, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, False, ["source state is stale"])
+        overrides = forecast_overrides or {}
+        baseline_cpu = overrides.get((dst.node_id, "cpu"), dst.cpu_util)
+        baseline_mem = overrides.get((dst.node_id, "memory"), dst.mem_util)
+        new_cpu = baseline_cpu + service_cpu / max(dst.cpu_total, 1e-9)
+        new_mem = baseline_mem + service_mem_mb / max(dst.memory_total_mb, 1e-9)
         if new_cpu > 1.0 or new_mem > 1.0:
             notes.append("destination lacks capacity")
             return SimResult(atype, new_cpu, new_mem, 0.0, 1.0, 0.0, -1.0, False, notes)
+        if atype == "MIGRATE":
+            bandwidth_mbps = float(action.get("bandwidth_mbps", bandwidth_mbps))
+            state_mb = float(action.get("state_mb", state_mb))
+            if bandwidth_mbps <= 0:
+                return SimResult(atype, new_cpu, new_mem, 0.0, 1.0, 0.0, -1.0, False, ["migration bandwidth unavailable"])
         cost = migration_cost(state_mb, bandwidth_mbps) if atype == "MIGRATE" else 0.0
         dur = migration_duration(state_mb, bandwidth_mbps) if atype == "MIGRATE" else 0.0
         lat = _latency_model(new_cpu)
@@ -103,6 +120,10 @@ def simulate_action(
         return SimResult(atype, new_cpu, new_mem, lat, _slo_prob(lat, 50.0), cost, dur, True, notes)
 
     if atype == "SCALE":
+        if src is None:
+            return SimResult(atype, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, False, ["unknown source node"])
+        if src is not None and src.stale:
+            return SimResult(atype, src.cpu_util, src.mem_util, 0.0, 1.0, 0.0, 0.0, False, ["source state is stale"])
         replicas = int(action.get("replicas", 1) or 1)
         per_replica = service_rate / max(replicas, 1)
         # More replicas spread load: effective cpu falls with replica count.
@@ -112,6 +133,10 @@ def simulate_action(
         return SimResult(atype, eff_cpu, src.mem_util if src else 0.5, lat, _slo_prob(lat, 50.0), 0.0, 0.0, True, notes)
 
     if atype == "RESOURCE_ADJUST":
+        if src is None:
+            return SimResult(atype, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, False, ["unknown source node"])
+        if src is not None and src.stale:
+            return SimResult(atype, src.cpu_util, src.mem_util, 0.0, 1.0, 0.0, 0.0, False, ["source state is stale"])
         base = src.cpu_util if src else 0.7
         new_cpu = max(0.0, min(1.0, base + float(action.get("cpu_delta", 0.0))))
         lat = _latency_model(new_cpu)

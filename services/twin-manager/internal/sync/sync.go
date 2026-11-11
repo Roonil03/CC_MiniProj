@@ -30,14 +30,17 @@ func (e *SyncEngine) ApplyTelemetry(t model.TelemetryIngest) (model.NodeState, e
 	if t.NodeID == "" {
 		return model.NodeState{}, fmt.Errorf("node_id is required")
 	}
-	if math.IsNaN(t.CPUUtil) || math.IsInf(t.CPUUtil, 0) || t.CPUUtil < 0 || t.CPUUtil > 1 {
-		return model.NodeState{}, fmt.Errorf("cpu utilization must be in [0,1], got %v", t.CPUUtil)
+	if t.CPUUtil == nil || t.MemoryUtil == nil {
+		return model.NodeState{}, fmt.Errorf("cpu and memory utilization are required; zero must be explicit")
 	}
-	if math.IsNaN(t.MemoryUtil) || math.IsInf(t.MemoryUtil, 0) || t.MemoryUtil < 0 || t.MemoryUtil > 1 {
-		return model.NodeState{}, fmt.Errorf("memory utilization must be in [0,1], got %v", t.MemoryUtil)
+	if !validUtil(*t.CPUUtil) {
+		return model.NodeState{}, fmt.Errorf("cpu utilization must be in [0,1], got %v", *t.CPUUtil)
 	}
-	for _, value := range []float64{t.NetworkInMbps, t.NetworkOutMbps, t.CPUTotalCores, t.MemoryTotalMB} {
-		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+	if !validUtil(*t.MemoryUtil) {
+		return model.NodeState{}, fmt.Errorf("memory utilization must be in [0,1], got %v", *t.MemoryUtil)
+	}
+	for _, value := range []*float64{t.NetworkInMbps, t.NetworkOutMbps, t.CPUTotalCores, t.MemoryTotalMB} {
+		if value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0) || *value < 0) {
 			return model.NodeState{}, fmt.Errorf("capacity and network metrics must be finite and nonnegative")
 		}
 	}
@@ -48,36 +51,47 @@ func (e *SyncEngine) ApplyTelemetry(t model.TelemetryIngest) (model.NodeState, e
 	if ts.After(e.now().UTC()) {
 		return model.NodeState{}, fmt.Errorf("telemetry timestamp is in the future")
 	}
-	cpuTotal := t.CPUTotalCores
-	if cpuTotal <= 0 {
-		if prev, ok := e.store.GetNode(t.NodeID); ok {
-			cpuTotal = prev.CPUCoreTotal
-		}
+	prev, hadPrevious := e.store.GetNode(t.NodeID)
+	cpuTotal, memTotal := 0.0, 0.0
+	netIn, netOut := 0.0, 0.0
+	if hadPrevious {
+		cpuTotal, memTotal = prev.CPUCoreTotal, prev.MemoryTotalMB
+		netIn, netOut = prev.NetworkInMbps, prev.NetworkOutMbps
 	}
-	memTotal := t.MemoryTotalMB
-	if memTotal <= 0 {
-		if prev, ok := e.store.GetNode(t.NodeID); ok {
-			memTotal = prev.MemoryTotalMB
-		}
+	if t.CPUTotalCores != nil {
+		cpuTotal = *t.CPUTotalCores
+	}
+	if t.MemoryTotalMB != nil {
+		memTotal = *t.MemoryTotalMB
+	}
+	if t.NetworkInMbps != nil {
+		netIn = *t.NetworkInMbps
+	}
+	if t.NetworkOutMbps != nil {
+		netOut = *t.NetworkOutMbps
 	}
 	health := t.Health
 	if health == "" {
-		health = "unknown"
+		if hadPrevious {
+			health = prev.Health
+		} else {
+			health = "unknown"
+		}
 	}
 	n := model.NodeState{
 		NodeID:         t.NodeID,
 		CPUCoreTotal:   cpuTotal,
-		CPUUsedCores:   t.CPUUtil * cpuTotal,
+		CPUUsedCores:   *t.CPUUtil * cpuTotal,
 		MemoryTotalMB:  memTotal,
-		MemoryUsedMB:   t.MemoryUtil * memTotal,
-		NetworkInMbps:  t.NetworkInMbps,
-		NetworkOutMbps: t.NetworkOutMbps,
+		MemoryUsedMB:   *t.MemoryUtil * memTotal,
+		NetworkInMbps:  netIn,
+		NetworkOutMbps: netOut,
 		Health:         health,
 		Timestamp:      ts,
 		Stale:          e.now().UTC().Sub(ts) > e.staleAfter,
 	}
 	// Preserve location on updates.
-	if prev, ok := e.store.GetNode(t.NodeID); ok {
+	if hadPrevious {
 		n.Location = prev.Location
 		n.LatencyToCloudMs = prev.LatencyToCloudMs
 	}
@@ -85,6 +99,10 @@ func (e *SyncEngine) ApplyTelemetry(t model.TelemetryIngest) (model.NodeState, e
 		return model.NodeState{}, err
 	}
 	return n, nil
+}
+
+func validUtil(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0) && value >= 0 && value <= 1
 }
 
 // Nodes recomputes freshness at read time, including when telemetry stops.
