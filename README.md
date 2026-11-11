@@ -23,7 +23,7 @@ For local setup, copy `.env.example` to `.env`, set `DT_RAM_API_KEY`, `DT_RAM_SE
 
 | Capability | Status | Boundary |
 | --- | --- | --- |
-| Offline forecasting sweep and plots | Implemented | Recorded or synthetic local telemetry only |
+| Offline forecasting sweep and plots | Implemented; synthetic trial recorded | No real cluster generalization claim; [trial-01 results](docs/analysis/trial-01-synthetic-forecasting-2026-11-11.md) are generated fixtures |
 | Synthetic twin, counterfactual simulation and PPO evaluation | Simulated | Results are not live-cluster evidence |
 | Safety decision publication and Go controller audit | Shadow-only | Physical Kubernetes actuation is disabled |
 | Autonomous production migration | Planned | No deployment claim |

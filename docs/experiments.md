@@ -80,6 +80,21 @@ the run manifest, configs, logs, JSON, plots and resumable artifacts. The
 `_inputs` directory holds local SQLite fixtures and is excluded from the ZIP
 and Git. Synthetic results show software behavior only.
 
+### Recorded synthetic example: trial-01
+
+On 2026-11-11, `trial-01` completed stable and burst synthetic CPU forecasting
+scenarios with seeds 42 and 43. The seven-model sweep completed all jobs, but
+each generated fixture contains only one synthetic node and 1,800 samples.
+The comparison is an offline runner and metric-path check, not a real-cluster
+benchmark or research result. The run metadata reports a dirty working tree
+and unavailable commit identifiers in per-model records; the repository
+configuration was commit `61131f394d0444cb087e2370e71d85cbf5a7dc86`. The saved
+interval results have one calibration sample per horizon, so uncertainty
+calibration and coverage are unavailable. See the [sanitized trial report](analysis/trial-01-synthetic-forecasting-2026-11-11.md)
+for per-seed and per-scenario results, provenance, software versions, and
+limitations. The ignored inputs, model artifacts, and raw run outputs remain
+local and are not part of the report or Git.
+
 ## Optional synthetic policy objectives
 
 The opt-in RL CLI flag `--multi-objective` reports SLA violation rate,
