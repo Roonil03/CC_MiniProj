@@ -2,7 +2,7 @@ services:
   prediction-service:
     build:
       args:
-        TORCH_CUDA_INDEX: https://download.pytorch.org/whl/cu124
+        TORCH_CUDA_INDEX: https://download.pytorch.org/whl/cu126
     environment:
       DT_RAM_REQUIRE_CUDA: "1"
     deploy:
@@ -16,7 +16,7 @@ services:
   rl-service:
     build:
       args:
-        TORCH_CUDA_INDEX: https://download.pytorch.org/whl/cu124
+        TORCH_CUDA_INDEX: https://download.pytorch.org/whl/cu126
     environment:
       DT_RAM_REQUIRE_CUDA: "1"
     deploy:

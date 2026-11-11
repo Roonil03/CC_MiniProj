@@ -79,13 +79,19 @@ try {
     if (-not (Test-Path -LiteralPath $python)) {
         $basePython = (Get-Command py -ErrorAction SilentlyContinue)
         if ($basePython) {
-            & $basePython.Source -3.11 -m venv $venv
+            $selectedVersion = $null
+            foreach ($minor in @(13, 12, 11)) {
+                & $basePython.Source "-3.$minor" --version *> $null
+                if ($LASTEXITCODE -eq 0) { $selectedVersion = "-3.$minor"; break }
+            }
+            if (-not $selectedVersion) { throw "Python 3.11, 3.12 or 3.13 is required; install one and register it with the py launcher" }
+            & $basePython.Source $selectedVersion -m venv $venv
         } else {
             $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
             if (-not $pythonCommand) { $pythonCommand = Get-Command python3 -ErrorAction SilentlyContinue }
-            if (-not $pythonCommand) { throw "Python 3.11 is required; install it and expose py, python, or python3 on PATH" }
+            if (-not $pythonCommand) { throw "Python 3.11, 3.12 or 3.13 is required; expose py, python, or python3 on PATH" }
             $pythonVersion = & $pythonCommand.Source --version 2>&1 | Out-String
-            if ($pythonVersion -notmatch 'Python 3\.11\.') { throw "Python 3.11 is required to create this virtual environment; found $($pythonVersion.Trim())" }
+            if ($pythonVersion -notmatch 'Python 3\.(11|12|13)\.') { throw "Python 3.11, 3.12 or 3.13 is supported; found $($pythonVersion.Trim())" }
             & $pythonCommand.Source -m venv $venv
         }
         if ($LASTEXITCODE -ne 0) { throw "Could not create project-local virtual environment" }
@@ -97,9 +103,9 @@ try {
         Set-Content -LiteralPath $installed -Value $digest
     }
     $cudaInstalled = Join-Path $venv "dt-cuda-torch.txt"
-    if (-not (Test-Path $cudaInstalled) -or (Get-Content $cudaInstalled -Raw).Trim() -ne "2.5.1+cu124") {
-        if ((Invoke-Local "install-cuda-torch" $python @("-m", "pip", "install", "torch==2.5.1+cu124", "--index-url", "https://download.pytorch.org/whl/cu124")) -ne 0) { throw "Pinned CUDA PyTorch install failed" }
-        Set-Content -LiteralPath $cudaInstalled -Value "2.5.1+cu124"
+    if (-not (Test-Path $cudaInstalled) -or (Get-Content $cudaInstalled -Raw).Trim() -ne "2.6.0+cu126") {
+        if ((Invoke-Local "install-cuda-torch" $python @("-m", "pip", "install", "torch==2.6.0+cu126", "--index-url", "https://download.pytorch.org/whl/cu126")) -ne 0) { throw "Pinned CUDA PyTorch install failed" }
+        Set-Content -LiteralPath $cudaInstalled -Value "2.6.0+cu126"
     }
     if ((Invoke-Local "host-gpu-check" $python @("-c", "import torch; assert torch.cuda.is_available(), 'CUDA GPU unavailable to Windows Python'; print(torch.__version__, torch.cuda.get_device_name(0))")) -ne 0) { throw "Host Python cannot access CUDA GPU" }
     $env:DT_RAM_REQUIRE_CUDA = "1"
