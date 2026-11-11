@@ -5,7 +5,7 @@ param(
     [string[]]$Models = @("persistence", "arima", "ets", "lstm", "gru", "temporal", "transformer"),
     [string[]]$Metrics = @("cpu"),
     [string[]]$Scenarios = @("stable"),
-    [int[]]$Seeds = @(42),
+    [string[]]$Seeds = @("42"),
     [string[]]$Policies = @(),
     [int]$TrainingSteps = 2048,
     [int]$Epochs = 20,
@@ -21,6 +21,11 @@ $Models = @($Models | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Tri
 $Metrics = @($Metrics | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $Scenarios = @($Scenarios | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $Policies = @($Policies | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$seedValues = @($Seeds | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if (@($seedValues | Where-Object { $_ -notmatch '^\d+$' -or [long]$_ -gt [int]::MaxValue }).Count -gt 0) {
+    throw "Seeds must be comma-separated nonnegative integers"
+}
+$Seeds = @($seedValues | ForEach-Object { [int]$_ })
 $validModels = @("persistence", "arima", "ets", "lstm", "gru", "temporal", "transformer")
 $validMetrics = @("cpu", "memory", "network_in", "network_out")
 $validScenarios = @("stable", "burst", "memory-pressure")
@@ -35,8 +40,7 @@ if (-not $RunId) { $RunId = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmm
 if ($RunId -notmatch '^[A-Za-z0-9_-]+$') { throw "RunId must contain only letters, numbers, _ or -" }
 if ($Epochs -lt 1 -or $TrainingSteps -lt 1 -or $Seeds.Count -eq 0 -or $Models.Count -eq 0) { throw "Epochs, steps, seeds and models must be nonempty and positive" }
 $run = Join-Path $OutputRoot $RunId
-$venv = Join-Path $repo ".venv-dt-models"
-$python = Join-Path $venv "Scripts/python.exe"
+$python = "container-python"
 $prediction = Join-Path $repo "services/prediction-service"
 $requirements = Join-Path $repo "scripts/requirements-dt-models.txt"
 $ppoRequirements = Join-Path $repo "scripts/requirements-dt-ppo.txt"
@@ -49,10 +53,9 @@ if ($TelemetryExport) {
 }
 if ((Test-Path -LiteralPath $run) -and $Fresh) { throw "Fresh requires a new RunId so previous runs stay intact" }
 if ($WhatIf) {
-    $pythonAvailable = [bool](Get-Command py, python, python3 -ErrorAction SilentlyContinue)
-    Write-Output "WHATIF prerequisites: docker_cli=$([bool](Get-Command docker -ErrorAction SilentlyContinue)); python_launcher=$pythonAvailable; env_file=$(Test-Path -LiteralPath (Join-Path $repo '.env')); local_export=$([bool]$input)"
+    Write-Output "WHATIF prerequisites: docker_cli=$([bool](Get-Command docker -ErrorAction SilentlyContinue)); env_file=$(Test-Path -LiteralPath (Join-Path $repo '.env')); local_export=$([bool]$input); Python=GPU-enabled Docker container"
     Write-Output "WHATIF: run=$run; source=$(if ($input) { 'local JSONL' } else { 'synthetic' }); models=$($Models -join ','); metrics=$($Metrics -join ','); scenarios=$($Scenarios -join ','); seeds=$($Seeds -join ','); policies=$($Policies -join ',')"
-    Write-Output "WHATIF: check Docker Desktop/NVIDIA GPU; build and start local Compose stack with GPU override; create project venv and CUDA PyTorch; prepare offline SQLite; estimate; run existing prediction CLI and optional PPO CLI; synthetic scenarios=$RunAdversarialScenarios; zip outputs"
+    Write-Output "WHATIF: check Docker Desktop/NVIDIA GPU; build and start local Compose stack with GPU override; run preparation, estimation, training, plots in its Python container; prepare offline SQLite; run existing prediction CLI and optional PPO CLI; synthetic scenarios=$RunAdversarialScenarios; zip outputs"
     exit 0
 }
 
@@ -65,7 +68,23 @@ function SaveJson([string]$path, $value) {
     $value | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $tmp -Encoding UTF8
     Move-Item -LiteralPath $tmp -Destination $path -Force
 }
+function To-ContainerPath([string]$path) {
+    $fullPath = [IO.Path]::GetFullPath($path)
+    if (-not $fullPath.StartsWith($repo, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Container-run input/output path must be inside the repository: $path"
+    }
+    $relative = $fullPath.Substring($repo.Length).TrimStart([char[]]@('\', '/')).Replace('\', '/')
+    return "/workspace/$relative"
+}
 function Invoke-Local([string]$label, [string]$exe, [string[]]$arguments, [string]$workingDirectory = $repo) {
+    if ($exe -eq "container-python") {
+        $mapped = @($arguments | ForEach-Object {
+            if ($_ -match '^[A-Za-z]:[\\/]') { To-ContainerPath $_ } else { $_ }
+        })
+        $exe = "docker"
+        $arguments = $composeArgs + @("exec", "-T", "-w", "/workspace/services/prediction-service",
+                                      "prediction-service", "python") + $mapped
+    }
     Log "START $label executable=$exe arguments=$($arguments -join ' ')"
     $started = Get-Date
     Push-Location $workingDirectory
@@ -94,51 +113,11 @@ try {
     if ((Invoke-Local "docker-preflight" "docker" ($composeArgs + @("config", "--quiet"))) -ne 0) { throw "GPU Compose configuration is invalid" }
     if ((Invoke-Local "docker-start" "docker" ($composeArgs + @("up", "-d", "--build", "--pull", "missing"))) -ne 0) { throw "Could not pull missing images, build images, and start local Docker services" }
     if ((Invoke-Local "docker-gpu-check" "docker" ($composeArgs + @("exec", "-T", "prediction-service", "python", "-c", "import torch; assert torch.cuda.is_available(), 'CUDA GPU unavailable in prediction container'; print(torch.cuda.get_device_name(0))"))) -ne 0) { throw "Prediction container cannot access CUDA GPU" }
-    if (-not (Test-Path -LiteralPath $python)) {
-        $basePython = (Get-Command py -ErrorAction SilentlyContinue)
-        if ($basePython) {
-            $selectedVersion = $null
-            foreach ($minor in @(13, 12, 11)) {
-                & $basePython.Source "-3.$minor" --version *> $null
-                if ($LASTEXITCODE -eq 0) { $selectedVersion = "-3.$minor"; break }
-            }
-            if (-not $selectedVersion) { throw "Python 3.11, 3.12 or 3.13 is required; install one and register it with the py launcher" }
-            & $basePython.Source $selectedVersion -m venv $venv
-        } else {
-            $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
-            if (-not $pythonCommand) { $pythonCommand = Get-Command python3 -ErrorAction SilentlyContinue }
-            if (-not $pythonCommand) { throw "Python 3.11, 3.12 or 3.13 is required; expose py, python, or python3 on PATH" }
-            $pythonVersion = & $pythonCommand.Source --version 2>&1 | Out-String
-            if ($pythonVersion -notmatch 'Python 3\.(11|12|13)\.') { throw "Python 3.11, 3.12 or 3.13 is supported; found $($pythonVersion.Trim())" }
-            & $pythonCommand.Source -m venv $venv
-        }
-        if ($LASTEXITCODE -ne 0) { throw "Could not create project-local virtual environment" }
-    }
-    $installed = Join-Path $venv "dt-requirements.sha256"
-    $digest = (Get-FileHash -LiteralPath $requirements -Algorithm SHA256).Hash
-    if (-not (Test-Path $installed) -or (Get-Content $installed -Raw).Trim() -ne $digest) {
-        if ((Invoke-Local "install-forecast-deps" $python @("-m", "pip", "install", "--requirement", $requirements)) -ne 0) { throw "Pinned forecast dependency install failed" }
-        Set-Content -LiteralPath $installed -Value $digest
-    }
-    $cudaInstalled = Join-Path $venv "dt-cuda-torch.txt"
-    if (-not (Test-Path $cudaInstalled) -or (Get-Content $cudaInstalled -Raw).Trim() -ne "2.6.0+cu126") {
-        if ((Invoke-Local "install-cuda-torch" $python @("-m", "pip", "install", "torch==2.6.0+cu126", "--index-url", "https://download.pytorch.org/whl/cu126")) -ne 0) { throw "Pinned CUDA PyTorch install failed" }
-        Set-Content -LiteralPath $cudaInstalled -Value "2.6.0+cu126"
-    }
-    if ((Invoke-Local "host-gpu-check" $python @("-c", "import torch; assert torch.cuda.is_available(), 'CUDA GPU unavailable to Windows Python'; print(torch.__version__, torch.cuda.get_device_name(0))")) -ne 0) { throw "Host Python cannot access CUDA GPU" }
-    $env:DT_RAM_REQUIRE_CUDA = "1"
-    $gpuInfo = & $python -c "import json, torch; print(json.dumps({'torch':torch.__version__, 'cuda_runtime':torch.version.cuda, 'gpu':torch.cuda.get_device_name(0)}))"
-    SaveJson (Join-Path $run "runtime.json") @{ timestamp = (Stamp); gpu = ($gpuInfo | ConvertFrom-Json);
-        docker = ((& docker --version 2>&1 | Out-String).Trim()); compose = ((& docker compose version 2>&1 | Out-String).Trim()) }
+    if ((Invoke-Local "container-python-check" $python @("-c", "import torch; assert torch.cuda.is_available(), 'CUDA GPU unavailable'; print('Python GPU runtime:', __import__('sys').version, torch.__version__, torch.cuda.get_device_name(0))")) -ne 0) { throw "GPU-enabled container Python is unavailable" }
     if ($Policies.Count -gt 0) {
-        $ppoInstalled = Join-Path $venv "dt-ppo-requirements.sha256"
-        $ppoDigest = (Get-FileHash -LiteralPath $ppoRequirements -Algorithm SHA256).Hash
-        if (-not (Test-Path $ppoInstalled) -or (Get-Content $ppoInstalled -Raw).Trim() -ne $ppoDigest) {
-            if ((Invoke-Local "install-ppo-deps" $python @("-m", "pip", "install", "--requirement", $ppoRequirements)) -ne 0) { throw "Pinned PPO dependency install failed" }
-            Set-Content -LiteralPath $ppoInstalled -Value $ppoDigest
-        }
+        if ((Invoke-Local "install-ppo-deps" $python @("-m", "pip", "install", "--requirement", "/workspace/scripts/requirements-dt-ppo.txt")) -ne 0) { throw "Pinned PPO dependency install failed" }
     }
-    $version = (& $python --version 2>&1 | Out-String).Trim()
+    $version = "GPU-enabled prediction-service container Python (version recorded by container-python-check)"
     $gitSha = (& git -C $repo rev-parse HEAD | Out-String).Trim()
     $identity = if ($input) { @{ path = $input; sha256 = (Get-FileHash -LiteralPath $input -Algorithm SHA256).Hash; included_in_archive = $false } } else { @{ source = "synthetic" } }
     $config = @{ schema_version = 1; created_at = (Stamp); git_commit = $gitSha; python = $version; ps_version = $PSVersionTable.PSVersion.ToString();

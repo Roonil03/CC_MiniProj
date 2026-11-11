@@ -34,12 +34,13 @@ reported as testbed research findings.
 
 `scripts/run_dt_models.ps1` is an opt-in PowerShell 5.1/7 wrapper around the
 existing prediction sweep and RL CLI. A real run requires Docker Desktop in
-Linux-container mode, Python 3.11, 3.12, or 3.13, an NVIDIA GPU accessible to Docker and Windows Python,
-and a configured local `.env`. It builds/starts the local Compose stack with
+Linux-container mode, an NVIDIA GPU accessible to Docker, and a configured
+local `.env`. No Python installation on Windows is needed: preparation,
+training, estimates, and plotting run inside the GPU-enabled prediction
+container (currently Python 3.11). It builds/starts the local Compose stack with
 `docker-compose.gpu.yml`, then verifies CUDA in the prediction container. It
-creates `.venv-dt-models` under the repository and installs pinned forecast,
-PPO (when requested), and CUDA 12.6 PyTorch wheels there. It never installs
-globally or with administrator rights. Docker Desktop and GPU drivers are
+installs the optional pinned PPO dependencies in the prediction container.
+CUDA-enabled PyTorch is installed in the image during its build. Docker Desktop and GPU drivers are
 prerequisites; the script does not install those host components. It does not
 fetch datasets or contact a cluster, cloud, or production service. Docker
 image and pinned package pulls are required on first setup.
