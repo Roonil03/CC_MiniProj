@@ -13,7 +13,7 @@ param(
     [int]$HistorySteps = 60,
     [string[]]$Horizons = @("5", "10", "30", "60"),
     [switch]$Tune,
-    [switch]$UseBitbrains,
+    [switch]$UseBitbrains = $true,
     [string]$BitbrainsArchive = "",
     [string]$TelemetryExport = "",
     [switch]$Fresh,
@@ -23,6 +23,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($TelemetryExport -and -not $PSBoundParameters.ContainsKey("UseBitbrains")) { $UseBitbrains = $false }
 if ($UseBitbrains) {
     if (-not $PSBoundParameters.ContainsKey("Metrics")) { $Metrics = @("cpu", "memory") }
     if (-not $PSBoundParameters.ContainsKey("PeriodSeconds")) { $PeriodSeconds = 300 }
