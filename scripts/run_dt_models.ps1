@@ -77,6 +77,26 @@ if ($WhatIf) {
     exit 0
 }
 
+# Reject incompatible resumes before touching prior output or starting services.
+$existingConfig = Join-Path $run "config.json"
+if (Test-Path -LiteralPath $existingConfig) {
+    $prior = Get-Content -LiteralPath $existingConfig -Raw | ConvertFrom-Json
+    $requested = @{ models=$Models; metrics=$Metrics; scenarios=$Scenarios; seeds=$Seeds; policies=$Policies;
+                    training_steps=$TrainingSteps; epochs=$Epochs; period_seconds=$PeriodSeconds;
+                    history_steps=$HistorySteps; horizons=$Horizons; tune=[bool]$Tune }
+    foreach ($key in $requested.Keys) {
+        if ((@($prior.$key) -join ",") -ne (@($requested[$key]) -join ",")) { throw "Run configuration changed ($key); use a new RunId" }
+    }
+    $requestedSource = if ($UseBitbrains) { "bitbrains-fastStorage" } elseif ($input) { $null } else { "synthetic" }
+    if ($prior.input.source -ne $requestedSource) { throw "Run input changed; use a new RunId" }
+    $sourceFile = $input
+    if ($UseBitbrains) {
+        $sourceFile = if ($BitbrainsArchive) { $BitbrainsArchive } else { Join-Path $repo "datasets/raw/gwa_t_12_fastStorage.zip" }
+        if (-not [IO.Path]::IsPathRooted($sourceFile)) { $sourceFile = Join-Path $repo $sourceFile }
+        if (-not (Test-Path -LiteralPath $sourceFile)) { throw "Cached Bitbrains archive is required to verify this resume" }
+    }
+    if ($sourceFile -and (Get-FileHash -LiteralPath $sourceFile -Algorithm SHA256).Hash -ne $prior.input.sha256) { throw "Run input changed; use a new RunId" }
+}
 New-Item -ItemType Directory -Path $run -Force | Out-Null
 $log = Join-Path $run "runner.log"
 function Stamp { (Get-Date).ToUniversalTime().ToString("o") }
@@ -94,6 +114,15 @@ function SaveJson([string]$path, $value) {
     $tmp = "$path.tmp"
     $value | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $tmp -Encoding UTF8
     Move-Item -LiteralPath $tmp -Destination $path -Force
+}
+function Test-PpoResult([string]$path, [int]$seed, [int]$steps) {
+    if (-not (Test-Path -LiteralPath $path)) { return $false }
+    try {
+        $result = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        return ($result.seed -eq $seed -and $result.config.algorithm -eq "PPO" -and $result.config.training -eq $true -and
+                $result.ppo.requested_steps -eq $steps -and $result.ppo.actual_steps -ge $steps -and
+                $null -ne $result.ppo.policy -and $null -ne $result.evaluation.comparators.ppo)
+    } catch { return $false }
 }
 function To-ContainerPath([string]$path) {
     $fullPath = [IO.Path]::GetFullPath($path)
@@ -133,6 +162,7 @@ function Invoke-Local([string]$label, [string]$exe, [string[]]$arguments, [strin
     return $code
 }
 
+$resumeRejected = $false
 $jobs = @()
 $failed = @()
 $failurePath = Join-Path $run "failure.json"
@@ -171,9 +201,9 @@ try {
     if (Test-Path -LiteralPath $configPath) {
         $previous = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
         foreach ($key in @("models", "metrics", "scenarios", "seeds", "policies", "training_steps", "epochs", "period_seconds", "history_steps", "horizons", "tune")) {
-            if ((@($previous.$key) -join ",") -ne (@($config[$key]) -join ",")) { throw "Run configuration changed ($key); use a new RunId" }
+            if ((@($previous.$key) -join ",") -ne (@($config[$key]) -join ",")) { $resumeRejected = $true; throw "Run configuration changed ($key); use a new RunId" }
         }
-        if ($previous.input.sha256 -ne $identity.sha256 -or $previous.input.source -ne $identity.source) { throw "Run input changed; use a new RunId" }
+        if ($previous.input.sha256 -ne $identity.sha256 -or $previous.input.source -ne $identity.source) { $resumeRejected = $true; throw "Run input changed; use a new RunId" }
     } else { SaveJson $configPath $config }
     foreach ($scenario in $Scenarios) {
         foreach ($seed in $Seeds) {
@@ -232,9 +262,11 @@ try {
             if ($code -ne 0) { $failed += "forecast-$name" }
             if ($Policies.Count -gt 0) {
                 $policyFile = Join-Path $jobDir "ppo.json"
-                if (-not (Test-Path $policyFile)) {
+                if (-not (Test-PpoResult $policyFile $seed $TrainingSteps)) {
+                    if (Test-Path -LiteralPath $policyFile) { Log "Discarding incomplete PPO result for $name"; Remove-Item -LiteralPath $policyFile -Force }
                     $ppo = @((Join-Path $repo "services/rl-service/cli.py"), "--train", "--multi-objective", "--seed", "$seed", "--timesteps", "$TrainingSteps", "--output", $policyFile)
                     $policyCode = Invoke-Local "ppo-$name" $python $ppo
+                    if ($policyCode -eq 0 -and -not (Test-PpoResult $policyFile $seed $TrainingSteps)) { $policyCode = 1; Log "PPO result validation failed for $name" }
                     $jobs += @{ name = $name; type = "ppo"; exit_code = $policyCode; output = "$name/ppo.json" }
                     if ($policyCode -ne 0) { $failed += "ppo-$name" }
                 } else {
@@ -265,6 +297,7 @@ try {
     Compress-Archive -Path (Join-Path $run "*") -DestinationPath "$run.zip" -Force
     if ($failed.Count -gt 0) { exit 2 }
 } catch {
+    if ($resumeRejected) { throw }
     Log "FAILURE $($_.Exception.Message)"
     $errorMessage = $_.Exception.Message
     SaveJson $failurePath @{ timestamp = (Stamp); error = $errorMessage }
