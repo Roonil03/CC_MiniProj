@@ -96,6 +96,15 @@ share/python-wheels/
 MANIFEST
 
 # Testing & Coverage
+# Test sources remain available locally but are not versioned, by project-owner request.
+tests/
+test/
+__tests__/
+test_*.py
+*_test.go
+*.spec.ts
+*.test.ts
+*.test.js
 .pytest_cache/
 .coverage
 .coverage.*

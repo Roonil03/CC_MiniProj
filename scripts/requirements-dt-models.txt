@@ -1,4 +1,3 @@
-numpy==2.1.3
-statsmodels==0.14.4
+-r ../services/prediction-service/requirements-statistical.txt
 matplotlib==3.10.3
 psutil==7.0.0

@@ -11,7 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-COPY requirements.txt ./
+COPY requirements.txt requirements-statistical.txt ./
 ARG TORCH_CUDA_INDEX=
 # Keep successfully downloaded packages across BuildKit retries and rebuilds.
 RUN --mount=type=cache,target=/root/.cache/pip \
