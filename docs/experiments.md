@@ -1,36 +1,8 @@
-﻿# Experimental Design & Benchmark Protocol
+# Experimental Design & Benchmark Protocol
 
 Evaluation metrics include SLOVR, CDA, Decision Regret, and baseline comparisons.
 
-## Member 3 forecasting experiment protocol
-
-Collect versioned node telemetry from the implemented Go event contract;
-record source, topology, workload schedule, collection interval, and known
-faults. Export the replayable JSONL and quality manifest from the prediction
-collector. A model run records the dataset hash, seed, configuration, Git
-state, software versions, model ID, and artifact hash. Keep large traces,
-SQLite recordings, weights, and run output outside Git.
-
-Use the same node entities, target metric, observation cadence, history
-length, and horizons for all candidates. Split by time into 60% training,
-20% validation, and 20% final testing. Forecast targets must remain inside
-their partition. Use the validation period for training decisions and
-interval calibration, and select the serving candidate based on validation
-error and measured inference cost before interpreting final test scores.
-
-Compare persistence, ARIMA, ETS, LSTM, GRU, the lightweight temporal
-convolution, and the lightweight Transformer on per-horizon MAE, RMSE,
-defined MAPE and R², and interval coverage.
-Measure direct inference and live-network HTTP latency, CPU seconds, process
-RSS, and artifact size on named hardware. The in-process HTTP benchmark is a
-software check; server resource use requires separate deployment monitoring.
-Check the design's prediction latency target of less than 100 ms; report the
-measured value even if it misses. Evaluate
-stable, periodic, bursty, and fault periods when those labeled observations
-exist. Synthetic software fixtures verify behavior only and must never be
-reported as testbed research findings.
-
-## Offline Windows model run
+## Offline Model run
 
 `scripts/run_dt_models.ps1` is an opt-in PowerShell 5.1/7 wrapper around the
 existing prediction sweep and RL CLI. A real run requires Docker Desktop in
@@ -41,31 +13,31 @@ container (currently Python 3.11). It builds/starts the Compose prediction servi
 `docker-compose.gpu.yml`, then verifies CUDA in the prediction container. It
 installs the optional pinned PPO dependencies in the prediction container.
 CUDA-enabled PyTorch is installed in the image during its build. Docker Desktop and GPU drivers are
-prerequisites; the script does not install those host components. It does not
-fetch datasets or contact a cluster, cloud, or production service. Docker
-image and pinned package pulls are required on first setup.
-Without `-TelemetryExport` it prepares deterministic **synthetic** local
-fixtures for stable, burst, or memory-pressure forecasting. A supplied export
-must be a local `NODE_METRIC_UPDATED` JSONL file. Its raw contents stay outside
-the archive; the input manifest records its path and SHA-256 identity.
+prerequisites; the script does not install those host components. Docker image
+and pinned package pulls are required on first setup. The default input is
+Bitbrains fastStorage: the runner downloads it when it is not cached. Supply
+`-TelemetryExport` for local `NODE_METRIC_UPDATED` JSONL, or explicitly pass
+`-UseBitbrains:$false` without an export to generate synthetic fixtures. The
+input manifest records source identity; prepared SQLite inputs can be included
+in the output ZIP, so inspect the archive before sharing.
 
 From the repository root, inspect the plan with:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_dt_models.ps1 -WhatIf -RunId trial-01 -Models persistence -Scenarios stable -Seeds 42
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_dt_models.ps1 -WhatIf -UseBitbrains:$false -RunId example-synthetic -Models persistence -Scenarios stable -Seeds 42
 ```
 
 For an actual local GPU run:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_dt_models.ps1 -RunId trial-01 -Scenarios stable,burst -Seeds 42,43 -CheckpointPackage
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_dt_models.ps1 -UseBitbrains:$false -RunId example-synthetic -Scenarios stable,burst -Seeds 42,43 -CheckpointPackage
 ```
 
 Add `-Policies ppo` only when optional simulation training is desired. The
 statistical baselines (ARIMA/ETS) use CPU because their existing statsmodels
 implementation has no CUDA path. Neural forecasting and PPO require CUDA in
-this runner; they fail rather than silently falling back to CPU. The local
-Compose stack is started for the user's requested environment, while the
+this runner; they fail rather than silently falling back to CPU. The prediction
+service and its NATS dependency are started, while the
 offline sweep uses only local SQLite data and never consumes live broker
 messages. The
 script starts with a bounded persistence calibration and records an estimate
@@ -77,8 +49,7 @@ Resume with the same arguments and run ID; the runner skips completed jobs and
 retries interrupted or failed jobs. `-Fresh` requires a new run ID to preserve
 prior outputs. The final `experiments/runs/windows-models/<RunId>.zip` contains
 the run manifest, configs, logs, JSON, plots and resumable artifacts. The
-`_inputs` directory holds local SQLite fixtures and is excluded from the ZIP
-and Git. Synthetic results show software behavior only.
+prepared input is stored at `<RunId>/<scenario-seed>/input.sqlite` inside the run directory and included in the ZIP. Run data and model weights remain Git-ignored. Synthetic results show software behavior only. With `-UseBitbrains`, see the [real-trace guide](real-trace-run.md), the [completed bitbrains-02 report](analysis/bitbrains-02-2026-11-15.md), and the [earlier partial bitbrains-01 report](analysis/bitbrains-01-partial-2026-11-15.md).
 
 ### Recorded synthetic example: trial-01
 
@@ -87,8 +58,7 @@ scenarios with seeds 42 and 43. The seven-model sweep completed all jobs, but
 each generated fixture contains only one synthetic node and 1,800 samples.
 The comparison is an offline runner and metric-path check, not a real-cluster
 benchmark or research result. The run metadata reports a dirty working tree
-and unavailable commit identifiers in per-model records; the repository
-configuration was commit `61131f394d0444cb087e2370e71d85cbf5a7dc86`. The saved
+and unavailable commit identifiers in per-model records;. The saved
 interval results have one calibration sample per horizon, so uncertainty
 calibration and coverage are unavailable. See the [sanitized trial report](analysis/trial-01-synthetic-forecasting-2026-11-11.md)
 for per-seed and per-scenario results, provenance, software versions, and
