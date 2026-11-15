@@ -1,4 +1,4 @@
-﻿# Experimental Design & Benchmark Protocol
+# Experimental Design & Benchmark Protocol
 
 Evaluation metrics include SLOVR, CDA, Decision Regret, and baseline comparisons.
 
@@ -44,7 +44,7 @@ CUDA-enabled PyTorch is installed in the image during its build. Docker Desktop 
 prerequisites; the script does not install those host components. It does not
 fetch datasets or contact a cluster, cloud, or production service. Docker
 image and pinned package pulls are required on first setup.
-Without `-TelemetryExport` it prepares deterministic **synthetic** local
+Without `-TelemetryExport` or `-UseBitbrains` it prepares deterministic **synthetic** local
 fixtures for stable, burst, or memory-pressure forecasting. A supplied export
 must be a local `NODE_METRIC_UPDATED` JSONL file. Its raw contents stay outside
 the archive; the input manifest records its path and SHA-256 identity.
@@ -78,7 +78,7 @@ retries interrupted or failed jobs. `-Fresh` requires a new run ID to preserve
 prior outputs. The final `experiments/runs/windows-models/<RunId>.zip` contains
 the run manifest, configs, logs, JSON, plots and resumable artifacts. The
 `_inputs` directory holds local SQLite fixtures and is excluded from the ZIP
-and Git. Synthetic results show software behavior only.
+and Git. Synthetic results show software behavior only. With `-UseBitbrains`, see the [real-trace guide](real-trace-run.md) and the [partial bitbrains-01 report](analysis/bitbrains-01-partial-2026-11-15.md).
 
 ### Recorded synthetic example: trial-01
 

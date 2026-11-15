@@ -28,9 +28,9 @@ Repository history preserves individual contributions.
 - [Local deployment and infrastructure guide](infrastructure/README.md)
 - [Experiment protocol](docs/experiments.md)
 - [Shadow pipeline audit](docs/analysis/shadow-pipeline-audit-2026-11-15.md)
-- [Real-trace prediction run plan](docs/real-trace-run.md) — input, execution, and reporting requirements for the pending real-trace analysis
+- [Real-trace prediction run](docs/real-trace-run.md) — input, execution, and partial results
 
-The recorded [prediction trial](docs/analysis/trial-01-synthetic-forecasting-2026-11-11.md) uses synthetic fixtures; its limited calibration support does not establish real-cluster forecasting performance. The real-trace model sweep and its analysis remain pending.
+The recorded [prediction trial](docs/analysis/trial-01-synthetic-forecasting-2026-11-11.md) uses synthetic fixtures; its limited calibration support does not establish real-cluster forecasting performance. The [Bitbrains-01 report](docs/analysis/bitbrains-01-partial-2026-11-15.md) records an incomplete real-trace sweep: ARIMA and ETS failed. See the [evidence index](docs/analysis/README.md) for dated reports.
 
 For local setup, copy `.env.example` to `.env`, set `DT_RAM_API_KEY`, `DT_RAM_SERVICE_TOKEN`, and `POSTGRES_PASSWORD`, then follow the infrastructure guide. The gateway serves its interactive API docs at `/docs` on port `3000` by default.
 
@@ -38,7 +38,7 @@ For local setup, copy `.env.example` to `.env`, set `DT_RAM_API_KEY`, `DT_RAM_SE
 
 | Capability | Status | Boundary |
 | --- | --- | --- |
-| Offline forecasting sweep and plots | Implemented; synthetic trial recorded | No real cluster generalization claim; [trial-01 results](docs/analysis/trial-01-synthetic-forecasting-2026-11-11.md) are generated fixtures |
+| Offline forecasting sweep and plots | Implemented; synthetic trial and partial VM trace run recorded | The [Bitbrains sweep](docs/analysis/bitbrains-01-partial-2026-11-15.md) is incomplete; no real-cluster generalization claim |
 | Synthetic twin, counterfactual simulation and PPO evaluation | Simulated | Results are not live-cluster evidence |
 | Safety decision publication and Go controller audit | Shadow-only | Physical Kubernetes actuation is disabled |
 | Autonomous production migration | Planned | No deployment claim |
