@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import platform
+import re
 import subprocess
 import time
 from datetime import datetime, timedelta, timezone
@@ -22,7 +24,7 @@ KINDS = ("persistence", "arima", "ets", "lstm", "gru", "temporal", "transformer"
 
 def _versions() -> dict[str, str]:
     result = {"python": platform.python_version()}
-    for name in ("torch", "statsmodels"):
+    for name in ("torch", "numpy", "pandas", "scipy", "statsmodels", "patsy"):
         try:
             module = __import__(name)
             result[name] = module.__version__
@@ -41,6 +43,13 @@ def _git_info() -> dict[str, str | bool]:
                                              stderr=subprocess.DEVNULL, text=True, timeout=10).strip())
         return {"git_commit": commit, "working_tree_dirty": dirty}
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        # The slim runtime has no Git executable. The Windows runner supplies
+        # its observed host Git state explicitly to each container process.
+        commit = os.environ.get("DT_RAM_SOURCE_GIT_COMMIT", "")
+        dirty = os.environ.get("DT_RAM_SOURCE_GIT_DIRTY", "")
+        if re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", commit) and dirty in ("0", "1"):
+            return {"git_commit": commit, "working_tree_dirty": dirty == "1",
+                    "git_provenance_source": "runner-host-git"}
         return {"git_commit": "unavailable", "working_tree_dirty": True}
 
 
