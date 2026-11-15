@@ -30,7 +30,7 @@ Repository history preserves individual contributions. RL means reinforcement le
 - [Shadow pipeline audit](docs/analysis/shadow-pipeline-audit-2026-11-15.md)
 - [Real-trace prediction run](docs/real-trace-run.md) — input, execution, and partial results
 
-The recorded [prediction trial](docs/analysis/trial-01-synthetic-forecasting-2026-11-11.md) uses synthetic fixtures; its limited calibration support does not establish real-cluster forecasting performance. The [Bitbrains-01 report](docs/analysis/bitbrains-01-partial-2026-11-15.md) records an incomplete real-trace sweep: ARIMA and ETS failed. See the [evidence index](docs/analysis/README.md) for dated reports.
+The recorded [prediction trial](docs/analysis/trial-01-synthetic-forecasting-2026-11-11.md) uses synthetic fixtures; its limited calibration support does not establish real-cluster forecasting performance. The [Bitbrains-02 report](docs/analysis/bitbrains-02-2026-11-15.md) records a completed offline VM trace sweep and separate synthetic PPO evaluation. The earlier [Bitbrains-01 report](docs/analysis/bitbrains-01-partial-2026-11-15.md) preserves its incomplete sweep and failures. See the [evidence index](docs/analysis/README.md) for dated reports.
 
 Test source files are kept locally and ignored by Git; a fresh clone does not contain them.
 
@@ -40,7 +40,7 @@ For local setup, copy `.env.example` to `.env`, set `DT_RAM_API_KEY`, `DT_RAM_SE
 
 | Capability | Status | Boundary |
 | --- | --- | --- |
-| Offline forecasting sweep and plots | Implemented; synthetic trial and partial VM trace run recorded | The [Bitbrains sweep](docs/analysis/bitbrains-01-partial-2026-11-15.md) is incomplete; no real-cluster generalization claim |
+| Offline forecasting sweep and plots | Implemented; synthetic trial and completed VM trace sweep recorded | [Bitbrains-02](docs/analysis/bitbrains-02-2026-11-15.md) covers a limited VM subset; no real-cluster generalization claim |
 | Synthetic twin, counterfactual simulation and PPO evaluation | Simulated | Results are not live-cluster evidence |
 | Safety decision publication and Go controller audit | Shadow-only | Physical Kubernetes actuation is disabled |
 | Autonomous production migration | Planned | No deployment claim |

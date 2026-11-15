@@ -77,7 +77,7 @@ Resume with the same arguments and run ID; the runner skips completed jobs and
 retries interrupted or failed jobs. `-Fresh` requires a new run ID to preserve
 prior outputs. The final `experiments/runs/windows-models/<RunId>.zip` contains
 the run manifest, configs, logs, JSON, plots and resumable artifacts. The
-prepared input is stored at `<RunId>/<scenario-seed>/input.sqlite` inside the run directory and included in the ZIP. Run data and model weights remain Git-ignored. Synthetic results show software behavior only. With `-UseBitbrains`, see the [real-trace guide](real-trace-run.md) and the [partial bitbrains-01 report](analysis/bitbrains-01-partial-2026-11-15.md).
+prepared input is stored at `<RunId>/<scenario-seed>/input.sqlite` inside the run directory and included in the ZIP. Run data and model weights remain Git-ignored. Synthetic results show software behavior only. With `-UseBitbrains`, see the [real-trace guide](real-trace-run.md), the [completed bitbrains-02 report](analysis/bitbrains-02-2026-11-15.md), and the [earlier partial bitbrains-01 report](analysis/bitbrains-01-partial-2026-11-15.md).
 
 ### Recorded synthetic example: trial-01
 

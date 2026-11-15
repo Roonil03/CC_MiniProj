@@ -6,7 +6,7 @@ The source requests acknowledgment of Bitbrains and the Grid Workloads Archive, 
 
 ## Run a new experiment
 
-The project now pins the statistical stack to NumPy 2.1.3, pandas 2.2.3, SciPy 1.14.1, statsmodels 0.14.4 and patsy 1.0.1 in `services/prediction-service/requirements-statistical.txt`, addressing the dependency mismatch observed in bitbrains-01. A completed replacement sweep is still required to assess the full run. Use Docker Desktop with Linux containers and an NVIDIA GPU available to Docker. Put `.env` at the repository root using `.env.example`. Start from the updated `main` branch and choose a new run ID:
+The project now pins the statistical stack to NumPy 2.1.3, pandas 2.2.3, SciPy 1.14.1, statsmodels 0.14.4 and patsy 1.0.1 in `services/prediction-service/requirements-statistical.txt`, addressing the dependency mismatch observed in bitbrains-01. The [bitbrains-02 report](analysis/bitbrains-02-2026-11-15.md) records a completed replacement sweep and its limitations. Use Docker Desktop with Linux containers and an NVIDIA GPU available to Docker. Put `.env` at the repository root using `.env.example`. Start from the updated `main` branch and choose a new run ID:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_dt_models.ps1 -UseBitbrains -Tune -RunId bitbrains-example -Seeds 42,43 -CheckpointPackage
@@ -24,6 +24,6 @@ The runner downloads and caches the official archive when needed, imports a boun
 
 ## Recorded result and follow-up
 
-The [bitbrains-01 analysis](analysis/bitbrains-01-partial-2026-11-15.md) records an incomplete run: both seeds exited 2 after ARIMA and ETS failed for both targets. Completed jobs and plots are partial evidence, not a seven-model comparison. The ZIP includes prepared SQLite data and model weights; review its contents before sharing externally. It and the traces remain Git-ignored.
+The [bitbrains-01 analysis](analysis/bitbrains-01-partial-2026-11-15.md) records an earlier incomplete run: both seeds exited 2 after ARIMA and ETS failed for both targets. Completed jobs and plots are partial evidence, not a seven-model comparison. The ZIP includes prepared SQLite data and model weights; review its contents before sharing externally. It and the traces remain Git-ignored.
 
-Before a replacement sweep, investigate excluded source rows and verify the statistical dependencies. Use a new run ID for changed settings or software, retain the input manifest and archive, and report any failures. The same VM subset across seeds does not establish independent-trace generalization. PPO is a separate synthetic policy experiment and no PPO results were produced in bitbrains-01. Earlier reports remain in the [evidence index](analysis/README.md).
+Before a replacement sweep, investigate excluded source rows and verify the statistical dependencies. Use a new run ID for changed settings or software, retain the input manifest and archive, and report any failures. The same VM subset across seeds does not establish independent-trace generalization. PPO is a separate synthetic policy experiment; no PPO results were produced in bitbrains-01. Bitbrains-02 includes synthetic PPO results, separate from VM forecasting. Earlier reports remain in the [evidence index](analysis/README.md).
