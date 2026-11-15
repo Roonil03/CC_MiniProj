@@ -8,7 +8,7 @@ The input is the GWA-T-12 Bitbrains fastStorage VM trace. Acknowledge Bitbrains 
 
 The input manifest names five VMs (`bitbrains-1`, `bitbrains-10`, `bitbrains-100`, `bitbrains-1000`, `bitbrains-1001`), with 29,281 rows imported and 33,028 skipped, zero duplicates, and 6/1/0/0/0 missing cadence buckets respectively. An independent check of the five CSV files found 62,309 rows: 33,026 excluded for nonpositive memory capacity and two conflicting same-VM timestamps (VMs 10 and 100). This substantial exclusion can bias the retained sample and requires investigation before generalizing. CPU is a fraction of provisioned CPU and memory is active/provisioned KB. The reported span is 2013-08-12T13:40:46Z to 2013-09-11T13:39:58Z. The `stable` folder name is a legacy runner label, not a verified stable workload scenario. Seeds 42 and 43 use the same VM subset, not independent traces.
 
-The run used 300-second cadence, 60 history steps, 300/600/1800/3600-second horizons, CPU and memory targets, 20 requested epochs and bounded tuning. The outer configuration records Git commit `3f709d8d9b6d5742cf20cd2d4f294fdffbc68494`; model records say Git commit unavailable and working tree dirty. They record Python 3.11.18, PyTorch 2.6.0+cu126 and statsmodels 0.14.4. The runner log records pandas 3.1.1 already installed immediately before statsmodels installation. This limits exact source reproducibility. Selection is within each model family by mean validation RMSE over 64 sampled validation origins; it is not a final cross-family deployment selection. Completed neural selections used hidden width 16 or 32 and learning rate 0.001.
+The run used 300-second cadence, 60 history steps, 300/600/1800/3600-second horizons, CPU and memory targets, 20 requested epochs and bounded tuning. The outer configuration records Git commit `3f709d8d9b6d5742cf20cd2d4f294fdffbc68494`; model records say Git commit unavailable and working tree dirty. They record Python 3.11.18, PyTorch 2.6.0+cu126 and statsmodels 0.14.4. The runner log records pandas 3.1.1 already installed immediately before statsmodels installation. This limits exact source reproducibility. Selection is within each model family by mean validation RMSE over 64 sampled validation windows; it is not a final cross-family deployment selection. Completed neural selections used hidden width 16 or 32 and learning rate 0.001.
 
 ## Outcomes
 
@@ -41,10 +41,6 @@ The completed results record 18,226 training windows, 5,097 validation windows a
 
 For example, seed 42 CPU persistence has test MAE 0.01442 at five minutes and 0.00247 at 30 minutes; the Transformer has 0.00698 and 0.01063 respectively. Differences depend on horizon and target. The 64 sampled windows are not sufficient on their own to establish generalization, especially across different nodes, periods or workloads. Persistence CPU test RMSE at 30 and 60 minutes was 0.006942 and 0.009863 in both seeds, lower than the completed neural jobs at those horizons; ARIMA and ETS are absent. For LSTM CPU at five minutes, nominal 90% intervals covered 65.625% and 67.188% of the sampled test windows in seeds 42 and 43. These examples do not establish interval guarantees. Test MAE is not a measured SLA improvement. Validation choices, interval coverage, resource usage, detailed metrics and plots remain in each job's JSON and the archive; there is no valid result for failed jobs.
 
-## Next steps
-
-Investigate excluded rows and validate their distributions, repair and verify the statistical dependency stack, then repeat the complete sweep with preserved input provenance and a new run ID. Report all failures and selection criteria, check sample coverage by VM and time, and evaluate on additional independent traces before proposing a serving model. Do not merge these partial metrics into the synthetic trial or present a live-cluster, migration, PPO or SLA result from them.
-
 ## Per-horizon RMSE and selected configuration
 
 Test RMSE is a utilization fraction; each entry uses 64 sampled test windows. Missing ARIMA and ETS rows indicate failure, not zero error.
@@ -73,3 +69,7 @@ Test RMSE is a utilization fraction; each entry uses 64 sampled test windows. Mi
 | 43 | memory | transformer | 0.01753 | 0.03731 | 0.01935 | 0.03036 | 32 | 39.98 |
 
 The measured job durations cover each successful job's recorded run, including its bounded candidate search and evaluation; they are not a controlled hardware benchmark. The GPU preflight identified an NVIDIA GeForce RTX 3060 Laptop GPU and the neural result records CUDA. The system snapshot reports Linux WSL2, 16 logical CPUs and Python 3.11.18. Direct per-model inference latency, model sizes and calibration intervals are in the individual result JSON; compare only with matching hardware and workloads. No network-serving latency or production load test was measured here.
+
+## Next steps
+
+Investigate excluded rows and validate their distributions, repair and verify the statistical dependency stack, then repeat the complete sweep with preserved input provenance and a new run ID. Report all failures and selection criteria, check sample coverage by VM and time, and evaluate on additional independent traces before proposing a serving model. Do not merge these partial metrics into the synthetic trial or present a live-cluster, migration, PPO or SLA result from them.
