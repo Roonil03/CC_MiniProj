@@ -107,7 +107,7 @@ function To-ContainerPath([string]$path) {
 function Invoke-Local([string]$label, [string]$exe, [string[]]$arguments, [string]$workingDirectory = $repo) {
     if ($exe -eq "container-python") {
         $mapped = @($arguments | ForEach-Object {
-            if ([IO.Path]::IsPathRooted($_)) { To-ContainerPath $_ } else { $_ }
+            if ($_ -eq "/workspace" -or $_.StartsWith("/workspace/", [StringComparison]::Ordinal)) { $_ } elseif ([IO.Path]::IsPathRooted($_)) { To-ContainerPath $_ } else { $_ }
         })
         $exe = "docker"
         $arguments = $composeArgs + @("exec", "-T", "-w", "/workspace/services/prediction-service",
