@@ -37,7 +37,7 @@ existing prediction sweep and RL CLI. A real run requires Docker Desktop in
 Linux-container mode, an NVIDIA GPU accessible to Docker, and a configured
 local `.env`. No Python installation on Windows is needed: preparation,
 training, estimates, and plotting run inside the GPU-enabled prediction
-container (currently Python 3.11). It builds/starts the local Compose stack with
+container (currently Python 3.11). It builds/starts the Compose prediction service and its dependencies with
 `docker-compose.gpu.yml`, then verifies CUDA in the prediction container. It
 installs the optional pinned PPO dependencies in the prediction container.
 CUDA-enabled PyTorch is installed in the image during its build. Docker Desktop and GPU drivers are

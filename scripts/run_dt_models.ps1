@@ -74,7 +74,7 @@ if ((Test-Path -LiteralPath $run) -and $Fresh) { throw "Fresh requires a new Run
 if ($WhatIf) {
     Write-Output "WHATIF prerequisites: docker_cli=$([bool](Get-Command docker -ErrorAction SilentlyContinue)); env_file=$(Test-Path -LiteralPath (Join-Path $repo '.env')); local_export=$([bool]$input); Python=GPU-enabled Docker container"
     Write-Output "WHATIF: run=$run; source=$(if ($UseBitbrains) { 'Bitbrains fastStorage' } elseif ($input) { 'local JSONL' } else { 'synthetic' }); models=$($Models -join ','); metrics=$($Metrics -join ','); scenarios=$($Scenarios -join ','); seeds=$($Seeds -join ','); policies=$($Policies -join ',')"
-    Write-Output "WHATIF: check Docker Desktop/NVIDIA GPU; build and start local Compose stack with GPU override; run preparation, estimation, training, plots in its Python container; prepare offline SQLite; run existing prediction CLI and optional PPO CLI; synthetic scenarios=$RunAdversarialScenarios; zip outputs"
+    Write-Output "WHATIF: check Docker Desktop/NVIDIA GPU; build and start prediction-service and dependencies with GPU override; run preparation, estimation, training, plots in its Python container; prepare offline SQLite; run existing prediction CLI and optional PPO CLI; synthetic scenarios=$RunAdversarialScenarios; zip outputs"
     exit 0
 }
 
@@ -143,6 +143,7 @@ function Invoke-Local([string]$label, [string]$exe, [string[]]$arguments, [strin
         $arguments = $composeArgs + @("exec", "-T", "-w", "/workspace/services/prediction-service",
                                       "prediction-service", "python") + $mapped
     }
+    $script:lastNativeOutput = New-Object 'System.Collections.Generic.Queue[string]'
     Log "START $label executable=$exe arguments=$($arguments -join ' ')"
     $started = Get-Date
     Push-Location $workingDirectory
@@ -152,7 +153,11 @@ function Invoke-Local([string]$label, [string]$exe, [string[]]$arguments, [strin
         # ErrorRecords when the caller uses Stop. Keep the process exit code as
         # the authority and capture both output streams into the run log.
         $ErrorActionPreference = "Continue"
-        & $exe @arguments 2>&1 | ForEach-Object { Log "$label $_" }
+        & $exe @arguments 2>&1 | ForEach-Object {
+            $script:lastNativeOutput.Enqueue("$_")
+            if ($script:lastNativeOutput.Count -gt 20) { [void]$script:lastNativeOutput.Dequeue() }
+            Log "$label $_"
+        }
         $code = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previousErrorActionPreference
@@ -173,7 +178,7 @@ try {
     $composeArgs = @("compose", "--progress", "plain", "--env-file", (Join-Path $repo ".env"),
                      "-f", $compose, "-f", $composeGpu)
     if ((Invoke-Local "docker-preflight" "docker" ($composeArgs + @("config", "--quiet"))) -ne 0) { throw "GPU Compose configuration is invalid" }
-    if ((Invoke-Local "docker-start" "docker" ($composeArgs + @("up", "-d", "--build", "--pull", "missing"))) -ne 0) { throw "Could not pull missing images, build images, and start local Docker services" }
+    if ((Invoke-Local "docker-start" "docker" ($composeArgs + @("up", "-d", "--build", "--pull", "missing", "prediction-service"))) -ne 0) { throw "Could not pull missing images, build images, and start local Docker services. Last Docker output:`n$($script:lastNativeOutput.ToArray() -join [Environment]::NewLine)`nFull log: $log" }
     if ((Invoke-Local "docker-gpu-check" "docker" ($composeArgs + @("exec", "-T", "prediction-service", "python", "-c", "import torch; assert torch.cuda.is_available(), 'CUDA GPU unavailable in prediction container'; print(torch.cuda.get_device_name(0))"))) -ne 0) { throw "Prediction container cannot access CUDA GPU" }
     if ((Invoke-Local "container-python-check" $python @("-c", "import torch; assert torch.cuda.is_available(), 'CUDA GPU unavailable'; print('Python GPU runtime:', __import__('sys').version, torch.__version__, torch.cuda.get_device_name(0))")) -ne 0) { throw "GPU-enabled container Python is unavailable" }
     if ((Invoke-Local "install-model-deps" $python @("-m", "pip", "install", "--requirement", "/workspace/scripts/requirements-dt-models.txt")) -ne 0) { throw "Pinned model dependency install failed" }
