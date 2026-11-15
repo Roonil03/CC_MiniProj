@@ -9,6 +9,12 @@ param(
     [string[]]$Policies = @(),
     [int]$TrainingSteps = 2048,
     [int]$Epochs = 20,
+    [int]$PeriodSeconds = 1,
+    [int]$HistorySteps = 60,
+    [string[]]$Horizons = @("5", "10", "30", "60"),
+    [switch]$Tune,
+    [switch]$UseBitbrains,
+    [string]$BitbrainsArchive = "",
     [string]$TelemetryExport = "",
     [switch]$Fresh,
     [switch]$CheckpointPackage,
@@ -17,10 +23,19 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($UseBitbrains) {
+    if (-not $PSBoundParameters.ContainsKey("Metrics")) { $Metrics = @("cpu", "memory") }
+    if (-not $PSBoundParameters.ContainsKey("PeriodSeconds")) { $PeriodSeconds = 300 }
+    if (-not $PSBoundParameters.ContainsKey("HistorySteps")) { $HistorySteps = 60 }
+    if (-not $PSBoundParameters.ContainsKey("Horizons")) { $Horizons = @("300", "600", "1800", "3600") }
+}
 $Models = @($Models | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $Metrics = @($Metrics | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $Scenarios = @($Scenarios | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $Policies = @($Policies | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$Horizons = @($Horizons | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if (@($Horizons | Where-Object { $_ -notmatch '^\d+$' -or [long]$_ -gt [int]::MaxValue }).Count -gt 0) { throw "Horizons must be comma-separated positive integers" }
+$Horizons = @($Horizons | ForEach-Object { [int]$_ })
 $seedValues = @($Seeds | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 if (@($seedValues | Where-Object { $_ -notmatch '^\d+$' -or [long]$_ -gt [int]::MaxValue }).Count -gt 0) {
     throw "Seeds must be comma-separated nonnegative integers"
@@ -51,10 +66,13 @@ if ($TelemetryExport) {
     $input = (Resolve-Path -LiteralPath $TelemetryExport -ErrorAction Stop).Path
     if (-not [IO.File]::Exists($input)) { throw "TelemetryExport must be a local JSONL file" }
 }
+if ($UseBitbrains -and $TelemetryExport) { throw "Choose either Bitbrains or TelemetryExport" }
+if ($PeriodSeconds -lt 1 -or $HistorySteps -lt 1 -or $Horizons.Count -eq 0 -or @($Horizons | Where-Object { $_ -lt 1 }).Count) { throw "PeriodSeconds, HistorySteps and Horizons must be positive" }
+if ($UseBitbrains -and ($PeriodSeconds -ne 300 -or $HistorySteps -ne 60 -or ($Horizons -join ',') -ne '300,600,1800,3600')) { throw "Bitbrains requires -PeriodSeconds 300 -HistorySteps 60 -Horizons 300,600,1800,3600" }
 if ((Test-Path -LiteralPath $run) -and $Fresh) { throw "Fresh requires a new RunId so previous runs stay intact" }
 if ($WhatIf) {
     Write-Output "WHATIF prerequisites: docker_cli=$([bool](Get-Command docker -ErrorAction SilentlyContinue)); env_file=$(Test-Path -LiteralPath (Join-Path $repo '.env')); local_export=$([bool]$input); Python=GPU-enabled Docker container"
-    Write-Output "WHATIF: run=$run; source=$(if ($input) { 'local JSONL' } else { 'synthetic' }); models=$($Models -join ','); metrics=$($Metrics -join ','); scenarios=$($Scenarios -join ','); seeds=$($Seeds -join ','); policies=$($Policies -join ',')"
+    Write-Output "WHATIF: run=$run; source=$(if ($UseBitbrains) { 'Bitbrains fastStorage' } elseif ($input) { 'local JSONL' } else { 'synthetic' }); models=$($Models -join ','); metrics=$($Metrics -join ','); scenarios=$($Scenarios -join ','); seeds=$($Seeds -join ','); policies=$($Policies -join ',')"
     Write-Output "WHATIF: check Docker Desktop/NVIDIA GPU; build and start local Compose stack with GPU override; run preparation, estimation, training, plots in its Python container; prepare offline SQLite; run existing prediction CLI and optional PPO CLI; synthetic scenarios=$RunAdversarialScenarios; zip outputs"
     exit 0
 }
@@ -62,7 +80,16 @@ if ($WhatIf) {
 New-Item -ItemType Directory -Path $run -Force | Out-Null
 $log = Join-Path $run "runner.log"
 function Stamp { (Get-Date).ToUniversalTime().ToString("o") }
-function Log([string]$message) { $line = "$(Stamp) $message"; Add-Content -LiteralPath $log -Value $line; Write-Host $line }
+function Log([string]$message) {
+    $record = @{ timestamp = (Stamp); event = "runner"; message = $message; system = @{
+        machine = [Environment]::MachineName; os = [Environment]::OSVersion.VersionString;
+        processor_count = [Environment]::ProcessorCount; working_set_bytes = [Environment]::WorkingSet
+    } }
+    $line = $record | ConvertTo-Json -Compress -Depth 5
+    [IO.File]::AppendAllText((Join-Path $run "runner-events.jsonl"), "$line`n", (New-Object Text.UTF8Encoding($false)))
+    Add-Content -LiteralPath $log -Value $line -Encoding UTF8
+    Write-Host $line
+}
 function SaveJson([string]$path, $value) {
     $tmp = "$path.tmp"
     $value | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $tmp -Encoding UTF8
@@ -70,7 +97,8 @@ function SaveJson([string]$path, $value) {
 }
 function To-ContainerPath([string]$path) {
     $fullPath = [IO.Path]::GetFullPath($path)
-    if (-not $fullPath.StartsWith($repo, [StringComparison]::OrdinalIgnoreCase)) {
+    $rootPrefix = $repo.TrimEnd([char[]]@('\', '/')) + [IO.Path]::DirectorySeparatorChar
+    if ($fullPath -ne $repo -and -not $fullPath.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Container-run input/output path must be inside the repository: $path"
     }
     $relative = $fullPath.Substring($repo.Length).TrimStart([char[]]@('\', '/')).Replace('\', '/')
@@ -117,13 +145,34 @@ try {
     if ($Policies.Count -gt 0) {
         if ((Invoke-Local "install-ppo-deps" $python @("-m", "pip", "install", "--requirement", "/workspace/scripts/requirements-dt-ppo.txt")) -ne 0) { throw "Pinned PPO dependency install failed" }
     }
+    if ($UseBitbrains) {
+        if (-not $BitbrainsArchive) { $BitbrainsArchive = Join-Path $repo "datasets/raw/gwa_t_12_fastStorage.zip" }
+        if (-not [IO.Path]::IsPathRooted($BitbrainsArchive)) { $BitbrainsArchive = Join-Path $repo $BitbrainsArchive }
+        [void](To-ContainerPath $BitbrainsArchive)
+        if (-not (Test-Path -LiteralPath $BitbrainsArchive)) {
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $BitbrainsArchive) | Out-Null
+            $partial = "$BitbrainsArchive.part"
+            Log "Downloading official Bitbrains fastStorage archive"
+            try { Invoke-WebRequest -Uri "https://atlarge-research.com/gwa-traces/gwa_t_12_fastStorage.zip" -OutFile $partial; Move-Item -LiteralPath $partial -Destination $BitbrainsArchive }
+            catch { if (Test-Path -LiteralPath $partial) { Remove-Item -LiteralPath $partial -Force }; throw }
+        }
+    }
     $version = "GPU-enabled prediction-service container Python (version recorded by container-python-check)"
     $gitSha = (& git -C $repo rev-parse HEAD | Out-String).Trim()
-    $identity = if ($input) { @{ path = $input; sha256 = (Get-FileHash -LiteralPath $input -Algorithm SHA256).Hash; included_in_archive = $false } } else { @{ source = "synthetic" } }
+    $identity = if ($UseBitbrains) { @{ source = "bitbrains-fastStorage"; sha256 = (Get-FileHash -LiteralPath $BitbrainsArchive -Algorithm SHA256).Hash } } elseif ($input) { @{ path = $input; sha256 = (Get-FileHash -LiteralPath $input -Algorithm SHA256).Hash; included_in_archive = $false } } else { @{ source = "synthetic" } }
     $config = @{ schema_version = 1; created_at = (Stamp); git_commit = $gitSha; python = $version; ps_version = $PSVersionTable.PSVersion.ToString();
                  machine = [Environment]::MachineName; os = [Environment]::OSVersion.VersionString; models = $Models; metrics = $Metrics;
-                 scenarios = $Scenarios; seeds = $Seeds; policies = $Policies; training_steps = $TrainingSteps; epochs = $Epochs; input = $identity }
-    SaveJson (Join-Path $run "config.json") $config
+                 scenarios = $Scenarios; seeds = $Seeds; policies = $Policies; training_steps = $TrainingSteps; epochs = $Epochs; period_seconds = $PeriodSeconds; history_steps = $HistorySteps; horizons = $Horizons; tune = [bool]$Tune; input = $identity }
+    $configPath = Join-Path $run "config.json"
+    if (Test-Path -LiteralPath $configPath) {
+        $previous = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+        foreach ($key in @("models", "metrics", "scenarios", "seeds", "policies", "training_steps", "epochs", "period_seconds", "history_steps", "horizons", "tune")) {
+            if ((@($previous.$key) -join ",") -ne (@($config[$key]) -join ",")) { throw "Run configuration changed ($key); use a new RunId" }
+        }
+        if ($previous.input.sha256 -ne $identity.sha256 -or $previous.input.source -ne $identity.source) { throw "Run input changed; use a new RunId" }
+    } else { SaveJson $configPath $config }
+    $failurePath = Join-Path $run "failure.json"
+    if (Test-Path -LiteralPath $failurePath) { Remove-Item -LiteralPath $failurePath }
     $jobs = @()
     $failed = @()
     foreach ($scenario in $Scenarios) {
@@ -131,26 +180,33 @@ try {
             $name = "$scenario-seed$seed"
             $jobDir = Join-Path $run $name
             New-Item -ItemType Directory -Path $jobDir -Force | Out-Null
-            $db = Join-Path $OutputRoot "_inputs/$RunId/$name.sqlite"
+            $db = Join-Path $jobDir "input.sqlite"
             $dbParent = Split-Path -Parent $db
             New-Item -ItemType Directory -Path $dbParent -Force | Out-Null
+            $dbManifest = if ($UseBitbrains) { "$db.manifest.json" } else { [IO.Path]::ChangeExtension($db, ".manifest.json") }
+            if ((Test-Path -LiteralPath $db) -and -not (Test-Path -LiteralPath $dbManifest)) { Log "Discarding incomplete input database for $name"; Remove-Item -LiteralPath $db -Force }
+            if (-not (Test-Path -LiteralPath $db) -and $UseBitbrains) {
+                if ((Invoke-Local "import-$name" $python @("-m", "prediction_app.bitbrains", "--archive", $BitbrainsArchive, "--db", $db, "--max-vms", "5")) -ne 0) { throw "Bitbrains import failed for $name" }
+            }
             if (-not (Test-Path -LiteralPath $db)) {
                 $prepare = @((Join-Path $repo "scripts/prepare_dt_data.py"), "--output", $db, "--seed", "$seed", "--scenario", $scenario)
                 if ($input) { $prepare += @("--input", $input) }
                 if ((Invoke-Local "prepare-$name" $python $prepare) -ne 0) { throw "Input preparation failed for $name" }
             }
-            Copy-Item -LiteralPath ([IO.Path]::ChangeExtension($db, ".manifest.json")) -Destination (Join-Path $jobDir "input-manifest.json") -Force
+            Copy-Item -LiteralPath $dbManifest -Destination (Join-Path $jobDir "input-manifest.json") -Force
             $dataManifest = Get-Content -LiteralPath (Join-Path $jobDir "input-manifest.json") -Raw | ConvertFrom-Json
+            if ($UseBitbrains -and $dataManifest.archive_sha256 -ne $identity.sha256) { throw "Bitbrains archive changed since import; use a new RunId" }
             if ($input -and $dataManifest.input_sha256 -ne $identity.sha256) { throw "Input changed since $name was prepared; use a new RunId" }
             $calibrationDir = Join-Path $run "calibration"
             if (-not (Test-Path (Join-Path $calibrationDir "summary.json"))) {
                 $calibration = @("-m", "prediction_app.scripts.run_all_models", "--db", $db, "--run-dir", $calibrationDir,
-                                 "--models", "persistence", "--metrics", "cpu", "--history-steps", "12", "--horizons", "1", "2", "3",
-                                 "--seed", "$seed", "--epochs", "1", "--source-label", "synthetic-calibration")
+                                 "--models", "persistence", "--metrics", "cpu", "--history-steps", "$HistorySteps", "--period-seconds", "$PeriodSeconds", "--horizons") + @($Horizons | ForEach-Object { "$_" }) + @(
+                                 "--seed", "$seed", "--epochs", "1", "--source-label", $(if ($UseBitbrains) { "bitbrains-calibration" } elseif ($input) { "local-calibration" } else { "synthetic-calibration" }))
                 if ((Invoke-Local "calibrate-persistence" $python $calibration $prediction) -ne 0) { throw "Bounded local calibration failed" }
             }
             $sweep = @("-m", "prediction_app.scripts.run_all_models", "--db", $db, "--run-dir", (Join-Path $jobDir "forecast"),
-                       "--models") + $Models + @("--metrics") + $Metrics + @("--seed", "$seed", "--epochs", "$Epochs", "--source-label", $(if ($input) { "local-export" } else { "synthetic-$scenario" }))
+                       "--models") + $Models + @("--metrics") + $Metrics + @("--seed", "$seed", "--epochs", "$Epochs", "--period-seconds", "$PeriodSeconds", "--history-steps", "$HistorySteps", "--horizons") + @($Horizons | ForEach-Object { "$_" }) + @("--source-label", $(if ($UseBitbrains) { "bitbrains-fastStorage" } elseif ($input) { "local-export" } else { "synthetic-$scenario" }))
+            if ($Tune) { $sweep += "--tune" }
             $estimate = $sweep + @("--estimate-only")
             if (-not (Test-Path (Join-Path $jobDir "forecast/runtime_estimate.json"))) {
                 if ((Invoke-Local "estimate-$name" $python $estimate $prediction) -ne 0) { throw "Estimate failed for $name" }
@@ -188,11 +244,11 @@ try {
     if ((Invoke-Local "comparison-plots" $python @((Join-Path $repo "scripts/plot_run_comparisons.py"), "--run-dir", $run)) -ne 0) {
         $failed += "comparison-plots"
     }
-    $manifest = @{ schema_version = 1; created_at = (Stamp); run_id = $RunId; synthetic = (-not [bool]$input); jobs = $jobs;
-                   failed = $failed; input = $identity; archive = "$run.zip"; note = "Offline simulation-only outputs; no live cluster evidence" }
+    $manifest = @{ schema_version = 1; created_at = (Stamp); run_id = $RunId; synthetic = (-not [bool]$input -and -not $UseBitbrains); jobs = $jobs;
+                   failed = $failed; input = $identity; archive = "$run.zip"; note = "Offline forecasting and simulation; no live cluster evidence" }
     SaveJson (Join-Path $run "manifest.json") $manifest
-    Compress-Archive -Path (Join-Path $run "*") -DestinationPath "$run.zip" -Force
     Log "ARCHIVE $run.zip manifest=$(Join-Path $run 'manifest.json')"
+    Compress-Archive -Path (Join-Path $run "*") -DestinationPath "$run.zip" -Force
     if ($failed.Count -gt 0) { exit 2 }
 } catch {
     Log "FAILURE $($_.Exception.Message)"
