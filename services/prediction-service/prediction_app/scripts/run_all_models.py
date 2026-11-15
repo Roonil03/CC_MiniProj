@@ -580,8 +580,8 @@ def main(argv: list[str] | None = None) -> int:
         "plot_files": sorted(str(path.relative_to(run_dir)) for path in (run_dir / "plots").glob("*")),
     }
     write_json(run_dir / SUMMARY_FILE, summary)
+    logger.info("Packaging run archive: %s", run_dir.with_suffix(ARCHIVE_SUFFIX))
     archive = package_run(run_dir)
-    logger.info("Packaged run archive: %s (%d bytes)", archive, archive.stat().st_size)
     print(json.dumps({"status": state["status"], "failed_jobs": failed,
                       "archive": str(archive), "summary": str(run_dir / SUMMARY_FILE)}, indent=2))
     return 0 if not failed else 2
