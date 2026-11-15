@@ -88,7 +88,7 @@ describe('DecisionsController safety boundary', () => {
 
   it('forwards forecast provenance and only approves a feasible applied forecast', async () => {
     const timestamp = new Date().toISOString();
-    const prediction = { node_id: 'a', metric: 'cpu', origin_timestamp: timestamp,
+    const prediction = { node_id: 'b', metric: 'cpu', origin_timestamp: timestamp,
       model_id: 'model-1', horizon_seconds: 2, value: 0.7, confidence: 0.8 };
     const calls: any[][] = [];
     const request = async (...args: any[]) => {
@@ -96,7 +96,7 @@ describe('DecisionsController safety boundary', () => {
       if (args[0] === 'simulation') {
         const body = JSON.parse(args[2].body);
         assert.equal(body.forecast_horizon_seconds, 2);
-        assert.deepEqual(body.predicted, { forecasts: [{ node_id: 'a', metric: 'cpu', timestamp,
+        assert.deepEqual(body.predicted, { forecasts: [{ node_id: 'b', metric: 'cpu', timestamp,
           source: 'model-1', horizon_seconds: 2, value: 0.7 }], prediction_confidence: 0.8 });
         return { results: [{ action_type: 'MIGRATE', feasible: true, prediction_confidence: 0.8 }],
           applied_forecasts: body.predicted.forecasts };
@@ -115,7 +115,7 @@ describe('DecisionsController safety boundary', () => {
   });
 
   it('rejects missing, infeasible, or mismatched simulation evidence without using client confidence', async () => {
-    const prediction = { node_id: 'a', metric: 'cpu', origin_timestamp: new Date().toISOString(),
+    const prediction = { node_id: 'b', metric: 'cpu', origin_timestamp: new Date().toISOString(),
       model_id: 'm', horizon_seconds: 5, value: 0.5, confidence: null };
     for (const mode of ['missing', 'infeasible', 'unapplied', 'mismatch']) {
       let safetyCalled = false;
@@ -132,6 +132,28 @@ describe('DecisionsController safety boundary', () => {
       const controller = new DecisionsController({ request, settled } as unknown as UpstreamService);
       await assert.rejects(controller.approve({ decisionId: 'id', policyVersion: 'v',
         action: { type: 'MIGRATE', source: 'a', destination: 'b' }, predicted: { prediction_confidence: 1 }, executionMode: 'shadow' }));
+      assert.equal(safetyCalled, false);
+    }
+  });
+
+  it('rejects source-only forecasts and actions without forecast-conditioned simulation', async () => {
+    const prediction = { node_id: 'a', metric: 'cpu', origin_timestamp: new Date().toISOString(),
+      model_id: 'm', horizon_seconds: 5, value: 0.5, confidence: 0.9 };
+    for (const action of [{ type: 'MIGRATE', source: 'a', destination: 'b' },
+                          { type: 'PLACE', destination: 'b' },
+                          { type: 'SCALE', source: 'a', replicas: 2 },
+                          { type: 'RESOURCE_ADJUST', source: 'a', cpu_delta: 0.1 }]) {
+      let safetyCalled = false;
+      const request = async (name: string, _path: string, options: any) => {
+        if (name === 'safety') { safetyCalled = true; return {}; }
+        const body = JSON.parse(options.body);
+        return { results: [{ action_type: action.type, feasible: true }],
+          applied_forecasts: body.predicted.forecasts ?? [] };
+      };
+      const settled = async (name: string) => ({ status: 'ok' as const,
+        data: name === 'prediction' ? { predictions: [prediction] } : { nodes: [] } });
+      const controller = new DecisionsController({ request, settled } as unknown as UpstreamService);
+      await assert.rejects(controller.approve({ decisionId: 'id', policyVersion: 'v', action, executionMode: 'shadow' }));
       assert.equal(safetyCalled, false);
     }
   });

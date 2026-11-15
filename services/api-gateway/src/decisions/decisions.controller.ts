@@ -20,15 +20,19 @@ export class DecisionsController {
     // The gateway deliberately targets the safety service, never Kubernetes or
     // the infrastructure controller. Approved actuation remains a Go concern.
     const context = await this.context(decision, true);
-    if (String(decision.action.type ?? '').toUpperCase() !== 'NOOP') {
+    const actionType = String(decision.action.type ?? '').toUpperCase();
+    if (actionType !== 'NOOP') {
       const result = context.simulationResult;
       const simulated = Array.isArray(result?.results) ? result.results[0] : undefined;
       const applied = Array.isArray(result?.applied_forecasts) ? result.applied_forecasts : [];
       const sent = context.forecast?.predicted.forecasts ?? [];
-      const matches = applied.some((item: unknown) => isRecord(item) && sent.some((forecast) =>
+      const matches = ['MIGRATE', 'PLACE'].includes(actionType) &&
+        typeof decision.action.destination === 'string' && !!decision.action.destination &&
+        applied.some((item: unknown) => isRecord(item) && item.node_id === decision.action.destination &&
+        ['cpu', 'memory'].includes(item.metric) && sent.some((forecast) =>
         ['node_id', 'metric', 'timestamp', 'source', 'horizon_seconds', 'value'].every((key) => item[key] === forecast[key])));
       if (!isRecord(simulated) || simulated.feasible !== true ||
-          String(simulated.action_type ?? '').toUpperCase() !== String(decision.action.type ?? '').toUpperCase() || !matches) {
+          String(simulated.action_type ?? '').toUpperCase() !== actionType || !matches) {
         throw new UnprocessableEntityException({ approved: false, reasons: ['counterfactual simulation is infeasible or lacks a matching applied forecast'] });
       }
     }
@@ -112,7 +116,9 @@ function isRecord(value: unknown): value is Record<string, any> {
 
 function shortestForecast(value: unknown, action: Record<string, unknown>): { predicted: { forecasts: Record<string, unknown>[]; prediction_confidence: number }; horizon: number } | undefined {
   const body = isRecord(value) ? value : {};
-  const nodeIds = [action.source, action.destination].filter((id): id is string => typeof id === 'string' && !!id);
+  const type = String(action.type ?? '').toUpperCase();
+  const relevant = ['MIGRATE', 'PLACE'].includes(type) ? [action.destination] : [action.source, action.destination];
+  const nodeIds = relevant.filter((id): id is string => typeof id === 'string' && !!id);
   const predictions = (Array.isArray(body.predictions) ? body.predictions.filter(isRecord) : [])
     .filter((p) => nodeIds.includes(p.node_id) && ['cpu', 'memory'].includes(p.metric) &&
       typeof p.origin_timestamp === 'string' && /(?:Z|[+-]\d\d:\d\d)$/i.test(p.origin_timestamp) && Number.isFinite(Date.parse(p.origin_timestamp)) &&

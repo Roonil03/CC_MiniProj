@@ -168,11 +168,13 @@ source and positive bandwidth. Optional `predicted.forecasts` entries with
 unchanged.
 Simulation proposes outcomes; it does not actuate.
 
-For gateway requests, relevant CPU and memory forecasts at the shortest
-available horizon are sent with their origin timestamp and model ID. The
-gateway requires a feasible simulation result and a matching applied forecast
-before forwarding a non-NOOP approval to the safety service; missing or
-uncalibrated confidence is zero. NOOP remains subject to the safety service.
+For gateway migration and placement requests, destination CPU and memory
+forecasts at the shortest available horizon are sent with their origin timestamp
+and model ID. The gateway requires a feasible simulation result and a matching
+applied destination forecast before forwarding approval to the safety service.
+Scale and resource-adjust approvals fail closed because those simulator paths do
+not consume forecast overrides. Missing or uncalibrated confidence is zero.
+NOOP remains subject to the safety service.
 
 ### Safety service (default port 5003)
 
