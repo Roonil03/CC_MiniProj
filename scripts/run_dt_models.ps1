@@ -202,7 +202,7 @@ try {
             }
             Copy-Item -LiteralPath $dbManifest -Destination (Join-Path $jobDir "input-manifest.json") -Force
             $dataManifest = Get-Content -LiteralPath (Join-Path $jobDir "input-manifest.json") -Raw | ConvertFrom-Json
-            if ($UseBitbrains -and ($dataManifest.archive_sha256 -ne $identity.sha256 -or $dataManifest.cadence_seconds -ne 300 -or $dataManifest.source_url -ne "https://atlarge-research.com/gwa-traces/gwa_t_12_fastStorage.zip")) { throw "Bitbrains input provenance does not match the requested source and cadence; use a new RunId" }
+            if ($UseBitbrains -and ($dataManifest.archive_sha256 -ne $identity.sha256 -or $dataManifest.cadence_seconds -ne 300 -or $dataManifest.source_url -ne "https://atlarge-research.com/gwa-t-12/" -or $dataManifest.download_url -ne "https://atlarge-research.com/gwa-traces/gwa_t_12_fastStorage.zip")) { throw "Bitbrains input provenance does not match the requested source and cadence; use a new RunId" }
             if ((Invoke-Local "check-input-$name" $python @("-c", "import sqlite3,sys; c=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True); assert c.execute('PRAGMA quick_check').fetchone()[0]=='ok', 'SQLite integrity check failed'", $db)) -ne 0) { throw "Input database integrity check failed for $name" }
             if ($input -and $dataManifest.input_sha256 -ne $identity.sha256) { throw "Input changed since $name was prepared; use a new RunId" }
             $calibrationDir = Join-Path $run "calibration"
