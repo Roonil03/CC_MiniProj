@@ -83,9 +83,9 @@ def _validation_regions(windows, max_horizon: int):
     calibration_start = origins[len(origins) // 2]
     audit_start = origins[3 * len(origins) // 4]
     gap = timedelta(seconds=max_horizon)
-    tune = [w for w in windows if w.origin + gap < calibration_start]
+    tune = [w for w in windows if (w.target_end or w.origin + gap) < calibration_start]
     calibrate = [w for w in windows if calibration_start <= w.origin
-                 and w.origin + gap < audit_start]
+                 and (w.target_end or w.origin + gap) < audit_start]
     audit = [w for w in windows if w.origin >= audit_start]
     if not tune or not calibrate or not audit:
         raise ValueError("validation period too short after horizon guard gaps")
@@ -108,7 +108,8 @@ def _spaced(windows, minimum_seconds: int):
 def run_training(db: str, output: str, *, metric: str = "cpu", kind: str = "persistence",
                  history_steps: int = 60, horizons: tuple[int, ...] = (5, 10, 30, 60),
                  period_seconds: int = 1, seed: int = 42, epochs: int = 20,
-                 source_label: str, progress: Callable[[dict], None] | None = None) -> dict:
+                 source_label: str, progress: Callable[[dict], None] | None = None,
+                 tune: bool = False) -> dict:
     if metric not in METRICS or kind not in KINDS:
         raise ValueError("unsupported metric or model")
     if not source_label.strip():
@@ -126,7 +127,7 @@ def run_training(db: str, output: str, *, metric: str = "cpu", kind: str = "pers
     # Model selection, interval calibration, and coverage assessment are
     # separate contiguous regions within the validation period.
     validation = parts["validation"]
-    tune, calibrate, audit = _validation_regions(validation, max(horizons))
+    tune_windows, calibrate, audit = _validation_regions(validation, max(horizons))
     calibrate = _spaced(calibrate, max(horizons))
     audit = _spaced(audit, max(horizons))
     if kind in ("arima", "ets") and history_steps < 12:
@@ -138,19 +139,38 @@ def run_training(db: str, output: str, *, metric: str = "cpu", kind: str = "pers
 
     output_path = Path(output)
     output_path.mkdir(parents=True, exist_ok=True)
-    network = scale = None
-    fit_info = {}
-    if kind == "persistence":
-        forecast = lambda history: persistence(history, horizons)
-    elif kind in ("arima", "ets"):
-        forecast = lambda history: statistical(kind, history, horizons, period_seconds)
-    else:
-        network, scale, fit_info = fit_neural(
-            kind, parts["train"], tune, history_steps=history_steps,
-            horizons=horizons, seed=seed, epochs=epochs, progress=progress)
-        forecast = lambda history: predict_neural(network, scale, history)
-
-    tune_report, _, latency_ms = _evaluate(_subsample(tune), forecast, horizons)
+    # Candidate selection never sees calibration, audit, or test.
+    candidates = {
+        "persistence": [{}],
+        "arima": [{"order": (1, 0, 0)}, {"order": (2, 0, 0)}],
+        "ets": [{"trend": None}, {"trend": "add"}],
+        "lstm": [{"hidden": 16, "learning_rate": 0.001}, {"hidden": 32, "learning_rate": 0.001}],
+        "gru": [{"hidden": 16, "learning_rate": 0.001}, {"hidden": 32, "learning_rate": 0.001}],
+        "temporal": [{"hidden": 16, "learning_rate": 0.001}, {"hidden": 32, "learning_rate": 0.001}],
+        "transformer": [{"hidden": 16, "learning_rate": 0.001}, {"hidden": 32, "learning_rate": 0.001}],
+    }[kind]
+    if not tune:
+        candidates = candidates[:1]
+    trials = []
+    best = None
+    for candidate in candidates:
+        network = scale = None
+        fit_info = {}
+        if kind == "persistence":
+            forecast = lambda history: persistence(history, horizons)
+        elif kind in ("arima", "ets"):
+            forecast = lambda history, c=candidate: statistical(kind, history, horizons, period_seconds, **c)
+        else:
+            network, scale, fit_info = fit_neural(
+                kind, parts["train"], tune_windows, history_steps=history_steps,
+                horizons=horizons, seed=seed, epochs=epochs, progress=progress, **candidate)
+            forecast = lambda history, n=network, sc=scale: predict_neural(n, sc, history)
+        report, _, latency = _evaluate(_subsample(tune_windows), forecast, horizons)
+        score = sum(report[str(h)]["rmse"] for h in horizons) / len(horizons)
+        trials.append({"parameters": candidate, "validation_mean_rmse": score})
+        if best is None or score < best[0]:
+            best = (score, candidate, network, scale, fit_info, forecast, report, latency)
+    _, selected, network, scale, fit_info, forecast, tune_report, latency_ms = best
     _, cal_preds, _ = _evaluate(calibrate, forecast, horizons)
     _, audit_preds, _ = _evaluate(audit, forecast, horizons)
     radii = {}
@@ -195,7 +215,7 @@ def run_training(db: str, output: str, *, metric: str = "cpu", kind: str = "pers
     trained_at = datetime.now(timezone.utc).isoformat()
     config = {"metric": metric, "kind": kind, "history_steps": history_steps,
               "horizons_seconds": list(horizons), "period_seconds": period_seconds,
-              "seed": seed, "epochs": epochs}
+              "seed": seed, "epochs": epochs, **selected}
     version = hashlib.sha256(json.dumps({"dataset": dataset_version, "config": config,
                                         "source": source_hash, "git": git_info,
                                         "software": software, "trained_at": trained_at},
@@ -217,6 +237,8 @@ def run_training(db: str, output: str, *, metric: str = "cpu", kind: str = "pers
         "dataset_period": {"first": min(s.timestamp for s in samples).isoformat(),
                            "last": max(s.timestamp for s in samples).isoformat()},
         "training_timestamp": trained_at,
+        "selection": {"enabled": tune, "criterion": "mean_validation_rmse",
+                      "candidates": trials, "selected": selected},
         "hyperparameters": config, "fit": fit_info, "software": software,
         "source_sha256": source_hash,
         "training_windows": len(parts["train"]),
@@ -247,6 +269,7 @@ def main() -> None:
     parser.add_argument("--horizons", type=int, nargs="+", default=[5, 10, 30, 60])
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--tune", action="store_true", help="select bounded candidates on validation only")
     parser.add_argument("--source-label", required=True,
                         help="document the real collection or named test fixture")
     args = parser.parse_args()
@@ -254,7 +277,7 @@ def main() -> None:
                           history_steps=args.history_steps,
                           period_seconds=args.period_seconds,
                           horizons=tuple(args.horizons), seed=args.seed,
-                          epochs=args.epochs, source_label=args.source_label)
+                          epochs=args.epochs, source_label=args.source_label, tune=args.tune)
     print(json.dumps(record, indent=2))
 
 

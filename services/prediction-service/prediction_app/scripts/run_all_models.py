@@ -161,6 +161,7 @@ def make_config(args: argparse.Namespace) -> dict[str, Any]:
         "period_seconds": args.period_seconds,
         "seed": args.seed,
         "epochs": args.epochs,
+        "tune": args.tune,
         "source_label": args.source_label,
         "db": str(Path(args.db).resolve()),
     }
@@ -199,6 +200,8 @@ def load_or_create_state(run_dir: Path, config: dict[str, Any], fresh: bool, log
     path = run_dir / STATE_FILE
     if path.exists() and not fresh:
         state = json.loads(path.read_text(encoding="utf-8"))
+        # States created before tuning was introduced used one default candidate.
+        state.get("config", {}).setdefault("tune", False)
         if state.get("config") != config:
             raise ValueError("existing run configuration differs; use a new --run-dir or --fresh")
         for job in state.get("jobs", {}).values():
@@ -227,11 +230,13 @@ def save_state(run_dir: Path, state: dict[str, Any]) -> None:
     write_json(run_dir / STATE_FILE, state)
 
 
-def estimate_job_seconds(model: str, epochs: int, completed: list[dict[str, Any]]) -> tuple[float, str]:
+def estimate_job_seconds(model: str, epochs: int, completed: list[dict[str, Any]],
+                         tune: bool = False) -> tuple[float, str]:
     matching = [
         float(job["duration_seconds"])
         for job in completed
-        if job.get("model") == model and job.get("duration_seconds") is not None
+        if job.get("status") == "completed" and job.get("model") == model
+        and job.get("duration_seconds") is not None
     ]
     if matching:
         return sum(matching) / len(matching), "historical_same_model"
@@ -244,7 +249,8 @@ def estimate_job_seconds(model: str, epochs: int, completed: list[dict[str, Any]
         "temporal": max(4.0, epochs * 0.07),
         "transformer": max(5.0, epochs * 0.10),
     }
-    return heuristic.get(model, 10.0), "host_independent_heuristic"
+    candidate_count = 2 if tune and model != "persistence" else 1
+    return heuristic.get(model, 10.0) * candidate_count, "host_independent_heuristic"
 
 
 def write_estimate(run_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
@@ -255,16 +261,19 @@ def write_estimate(run_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
             estimate = float(job.get("duration_seconds") or 0.0)
             method = "observed"
         else:
-            estimate, method = estimate_job_seconds(job["model"], state["config"]["epochs"], completed)
+            estimate, method = estimate_job_seconds(job["model"], state["config"]["epochs"], completed,
+                                                    state["config"].get("tune", False))
         rows.append({"job": key, "model": job["model"], "metric": job["metric"],
-                     "status": job.get("status"), "estimated_seconds": round(estimate, 3),
+                     "status": job.get("status"),
+                     "candidate_count": 2 if state["config"].get("tune", False) and job["model"] != "persistence" else 1,
+                     "estimated_seconds": round(estimate, 3),
                      "method": method})
     remaining = sum(row["estimated_seconds"] for row in rows if row["status"] != "completed")
     total = sum(row["estimated_seconds"] for row in rows)
     estimate = {
         "generated_at": utc_now(),
         "run_id": state["run_id"],
-        "estimate_method": "observed durations when available, otherwise model heuristic",
+        "estimate_method": "observed durations when available, otherwise model heuristic multiplied by candidate count",
         "jobs": rows,
         "estimated_total_seconds": round(total, 3),
         "estimated_remaining_seconds": round(remaining, 3),
@@ -317,6 +326,7 @@ def run_job(args: argparse.Namespace, run_dir: Path, state: dict[str, Any], reco
                 epochs=args.epochs,
                 source_label=args.source_label,
                 progress=progress,
+                tune=args.tune,
             )
             duration = time.perf_counter() - start
             write_json(result_path, result)
@@ -379,7 +389,8 @@ def plot_results(run_dir: Path, state: dict[str, Any], recorder: EventRecorder, 
         actual = [float(job.get("duration_seconds") or 0) for job in completed_jobs]
         estimates = []
         for job in completed_jobs:
-            estimate, _ = estimate_job_seconds(job["model"], state["config"]["epochs"], completed_jobs)
+            estimate, _ = estimate_job_seconds(job["model"], state["config"]["epochs"], completed_jobs,
+                                               state["config"].get("tune", False))
             estimates.append(estimate)
         fig, ax = plt.subplots(figsize=(max(10, len(labels) * 1.2), 6))
         positions = list(range(len(labels)))
@@ -503,6 +514,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--period-seconds", type=int, default=1)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--tune", action="store_true", help="select bounded candidates on validation")
     parser.add_argument("--source-label", default="recorded-telemetry")
     parser.add_argument("--max-attempts", type=int, default=2)
     parser.add_argument("--retry-delay-seconds", type=float, default=2.0)
