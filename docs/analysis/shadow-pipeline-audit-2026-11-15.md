@@ -2,7 +2,7 @@
 
 ## Scope and evidence
 
-This source review covers non-prediction services and deployment configuration at base commit `42548c3`, against the intended telemetry → twin → prediction → simulation → safety → Go controller pipeline. It is not a new experiment or physical deployment validation. The [synthetic trial](trial-01-synthetic-forecasting-2026-11-11.md) and [k3d testbed report](../../infrastructure/testbed/deployment-findings.md) retain their dates and provenance.
+This source review covers non-prediction services and deployment configuration, against the intended telemetry → twin → prediction → simulation → safety → Go controller pipeline. It is not a new experiment or physical deployment validation. The [synthetic trial](trial-01-synthetic-forecasting-2026-11-11.md) and [k3d testbed report](../../infrastructure/testbed/deployment-findings.md) retain their dates and provenance.
 
 ## Findings
 
@@ -11,8 +11,6 @@ This source review covers non-prediction services and deployment configuration a
 3. **The Kubernetes example lacks service authentication configuration.** Token checks in the twin and controller HTTP routers are optional, and `infrastructure/kubernetes/10-go-services.yaml` sets no service token. Configure authenticated service access and network controls before treating that deployment as trusted. Compose requires a token; this finding concerns the Kubernetes manifests.
 4. **Safety and audit state have operational limits.** Migration limits and pending reservations in `services/safety-service/safety_app/main.py` are process-local. The controller audit in `services/infrastructure-controller/internal/audit/audit.go` is bounded and only persistent when `DT_RAM_AUDIT_PATH` is configured. Compose configures a volume; the Kubernetes example does not. Restart and multi-instance behavior, durable outcomes, and idempotency require validation before live use.
 5. **The simulator is a model, not observed workload behavior.** `services/simulation-service/app/simulator.py` uses default service demand, latency and migration approximations; workload/SLO measurements are not supplied by the node event. `services/rl-service/cli.py` evaluates synthetic state and trains only when requested. PPO configuration and tuning must be recorded alongside actual evaluation; this audit does not claim an evaluated or tuned PPO run. Calibrate with measured workload and network data before deployment conclusions.
-
-**Remediation after this audit:** [PR #16](https://github.com/Roonil03/CC_MiniProj/pull/16) corrected finding 1 by forwarding forecast provenance and requiring a feasible result and a matching applied destination forecast for migration and placement approval. Scale and resource-adjust approvals fail closed because their simulator paths do not consume forecasts. This correction does not resolve the independent fidelity, health, or operational evidence gaps above.
 
 ## Existing protections and remaining boundary
 

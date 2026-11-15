@@ -2,35 +2,7 @@
 
 Evaluation metrics include SLOVR, CDA, Decision Regret, and baseline comparisons.
 
-## Member 3 forecasting experiment protocol
-
-Collect versioned node telemetry from the implemented Go event contract;
-record source, topology, workload schedule, collection interval, and known
-faults. Export the replayable JSONL and quality manifest from the prediction
-collector. A model run records the dataset hash, seed, configuration, Git
-state, software versions, model ID, and artifact hash. Keep large traces,
-SQLite recordings, weights, and run output outside Git.
-
-Use the same node entities, target metric, observation cadence, history
-length, and horizons for all candidates. Split by time into 60% training,
-20% validation, and 20% final testing. Forecast targets must remain inside
-their partition. Use the validation period for training decisions and
-interval calibration, and select the serving candidate based on validation
-error and measured inference cost before interpreting final test scores.
-
-Compare persistence, ARIMA, ETS, LSTM, GRU, the lightweight temporal
-convolution, and the lightweight Transformer on per-horizon MAE, RMSE,
-defined MAPE and R², and interval coverage.
-Measure direct inference and live-network HTTP latency, CPU seconds, process
-RSS, and artifact size on named hardware. The in-process HTTP benchmark is a
-software check; server resource use requires separate deployment monitoring.
-Check the design's prediction latency target of less than 100 ms; report the
-measured value even if it misses. Evaluate
-stable, periodic, bursty, and fault periods when those labeled observations
-exist. Synthetic software fixtures verify behavior only and must never be
-reported as testbed research findings.
-
-## Offline Windows model run
+## Offline Model run
 
 `scripts/run_dt_models.ps1` is an opt-in PowerShell 5.1/7 wrapper around the
 existing prediction sweep and RL CLI. A real run requires Docker Desktop in
@@ -86,8 +58,7 @@ scenarios with seeds 42 and 43. The seven-model sweep completed all jobs, but
 each generated fixture contains only one synthetic node and 1,800 samples.
 The comparison is an offline runner and metric-path check, not a real-cluster
 benchmark or research result. The run metadata reports a dirty working tree
-and unavailable commit identifiers in per-model records; the repository
-configuration was commit `61131f394d0444cb087e2370e71d85cbf5a7dc86`. The saved
+and unavailable commit identifiers in per-model records;. The saved
 interval results have one calibration sample per horizon, so uncertainty
 calibration and coverage are unavailable. See the [sanitized trial report](analysis/trial-01-synthetic-forecasting-2026-11-11.md)
 for per-seed and per-scenario results, provenance, software versions, and
