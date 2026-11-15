@@ -19,7 +19,7 @@ DT-RAM is a group project organized across four member areas:
 - Member 3: forecasting and prediction.
 - Member 4: reinforcement learning, simulation, and the Digital Twin.
 
-Repository history preserves individual contributions.
+Repository history preserves individual contributions. RL means reinforcement learning; the Digital Twin supplies a simulated environment for resource-management decisions. This project does not use retrieval-augmented generation (RAG).
 
 ## Explore the project
 
@@ -31,6 +31,8 @@ Repository history preserves individual contributions.
 - [Real-trace prediction run](docs/real-trace-run.md) — input, execution, and partial results
 
 The recorded [prediction trial](docs/analysis/trial-01-synthetic-forecasting-2026-11-11.md) uses synthetic fixtures; its limited calibration support does not establish real-cluster forecasting performance. The [Bitbrains-01 report](docs/analysis/bitbrains-01-partial-2026-11-15.md) records an incomplete real-trace sweep: ARIMA and ETS failed. See the [evidence index](docs/analysis/README.md) for dated reports.
+
+Test source files are kept locally and ignored by Git; a fresh clone does not contain them.
 
 For local setup, copy `.env.example` to `.env`, set `DT_RAM_API_KEY`, `DT_RAM_SERVICE_TOKEN`, and `POSTGRES_PASSWORD`, then follow the infrastructure guide. The gateway serves its interactive API docs at `/docs` on port `3000` by default.
 
