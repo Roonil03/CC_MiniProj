@@ -12,7 +12,7 @@ This directory stores benchmark workload traces and resource telemetry datasets 
 
 When adding new datasets:
 1. Place raw traces into `datasets/raw/<dataset_name>/`.
-2. Run preprocessing scripts from `services/prediction-service/` or `scripts/`.
+2. Use the relevant importer or preprocessing command documented by the prediction service for the source and schema.
 3. Save standardized schema outputs into `datasets/processed/`.
 
 ## Member 3 node telemetry contract
