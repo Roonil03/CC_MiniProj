@@ -103,7 +103,7 @@ def create_app(*, db_path: str | Path | None = None,
                         calibration = record["calibration"]
                     buckets = bucketed(samples, period)[node]
                     origin_bucket = max(buckets)
-                    forecast_origin = datetime.fromtimestamp(origin_bucket * period, timezone.utc)
+                    forecast_origin = buckets[origin_bucket].timestamp
                     keys = range(origin_bucket - required + 1, origin_bucket + 1)
                     if not all(key in buckets for key in keys):
                         raise ValueError("insufficient contiguous history")

@@ -8,6 +8,7 @@ always the simulator/twin — never physical infrastructure.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import os
 from typing import Any
 
@@ -35,6 +36,24 @@ class PPOConfig:
     n_epochs: int = 10
     total_timesteps: int = 10_000
     seed: int = 42
+
+    def __post_init__(self) -> None:
+        for name in ("gamma", "learning_rate"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise ValueError(f"{name} must be finite")
+        if not 0 <= self.gamma <= 1:
+            raise ValueError("gamma must be in [0,1]")
+        if self.learning_rate <= 0:
+            raise ValueError("learning_rate must be positive")
+        for name in ("n_steps", "batch_size", "n_epochs", "total_timesteps"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        if self.n_steps < 2 or self.batch_size < 2 or self.batch_size > self.n_steps:
+            raise ValueError("batch_size and n_steps must be at least 2, with batch_size <= n_steps")
+        if isinstance(self.seed, bool) or not isinstance(self.seed, int) or self.seed < 0:
+            raise ValueError("seed must be a non-negative integer")
 
     def as_dict(self) -> dict[str, Any]:
         return {

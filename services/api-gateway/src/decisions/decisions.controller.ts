@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, UnprocessableEntityException } from '@nestjs/common';
 import { ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { UpstreamService } from '../upstream/upstream.service';
 import { ApproveDecisionDto, DecisionDto } from './decision.dto';
@@ -20,6 +20,22 @@ export class DecisionsController {
     // The gateway deliberately targets the safety service, never Kubernetes or
     // the infrastructure controller. Approved actuation remains a Go concern.
     const context = await this.context(decision, true);
+    const actionType = String(decision.action.type ?? '').toUpperCase();
+    if (actionType !== 'NOOP') {
+      const result = context.simulationResult;
+      const simulated = Array.isArray(result?.results) ? result.results[0] : undefined;
+      const applied = Array.isArray(result?.applied_forecasts) ? result.applied_forecasts : [];
+      const sent = context.forecast?.predicted.forecasts ?? [];
+      const matches = ['MIGRATE', 'PLACE'].includes(actionType) &&
+        typeof decision.action.destination === 'string' && !!decision.action.destination &&
+        applied.some((item: unknown) => isRecord(item) && item.node_id === decision.action.destination &&
+        ['cpu', 'memory'].includes(item.metric) && sent.some((forecast) =>
+        ['node_id', 'metric', 'timestamp', 'source', 'horizon_seconds', 'value'].every((key) => item[key] === forecast[key])));
+      if (!isRecord(simulated) || simulated.feasible !== true ||
+          String(simulated.action_type ?? '').toUpperCase() !== actionType || !matches) {
+        throw new UnprocessableEntityException({ approved: false, reasons: ['counterfactual simulation is infeasible or lacks a matching applied forecast'] });
+      }
+    }
     return this.upstream.request('safety', '/decisions/approve', {
       method: 'POST', body: JSON.stringify({
         ...toCanonicalDecision(decision),
@@ -40,23 +56,25 @@ export class DecisionsController {
     const simulationRequest = {
         nodes,
         candidates: [action],
-        predicted: forecast ?? (approval ? {} : decision.predicted ?? {}),
+        predicted: forecast?.predicted ?? (approval ? {} : decision.predicted ?? {}),
+        ...(forecast ? { forecast_horizon_seconds: forecast.horizon } : {}),
         dt_fidelity: twinFidelity(nodes),
     };
     const simulationResult = await this.upstream.request<Record<string, any>>('simulation', '/simulate', {
       method: 'POST', body: JSON.stringify(simulationRequest),
     });
-    const simulated = Array.isArray(simulationResult.results) ? simulationResult.results[0] : undefined;
+    const simulated = Array.isArray(simulationResult?.results) ? simulationResult.results[0] : undefined;
     const predicted = simulated ? {
       cpu: simulated.predicted_cpu,
       memory: simulated.predicted_mem,
       latency: simulated.predicted_latency_ms,
       slo_violation_probability: simulated.slo_violation_prob,
       prediction_confidence: simulated.prediction_confidence ?? 0,
-    } : (forecast ?? (approval ? {} : decision.predicted ?? {}));
+    } : (approval ? {} : decision.predicted ?? {});
     return {
       simulationRequest,
       simulationResult,
+      forecast,
       safetyContext: {
         dt_fidelity: twinFidelity(nodes),
         destination_free_cpu: destinationFreeCpu(nodes, action.destination),
@@ -96,20 +114,34 @@ function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function shortestForecast(value: unknown, action: Record<string, unknown>): Record<string, unknown> | undefined {
+function shortestForecast(value: unknown, action: Record<string, unknown>): { predicted: { forecasts: Record<string, unknown>[]; prediction_confidence: number }; horizon: number } | undefined {
   const body = isRecord(value) ? value : {};
-  const predictions = Array.isArray(body.predictions) ? body.predictions.filter(isRecord) : [];
-  const nodeIds = [action.source, action.destination].filter((id): id is string => typeof id === 'string');
-  const candidate = predictions
-    .filter((prediction) => nodeIds.length === 0 || nodeIds.includes(String(prediction.node_id)))
-    .sort((left, right) => Number(left.horizon_seconds ?? Infinity) - Number(right.horizon_seconds ?? Infinity))[0];
-  if (!candidate) return undefined;
-  const metric = String(candidate.metric ?? 'cpu');
+  const type = String(action.type ?? '').toUpperCase();
+  const relevant = ['MIGRATE', 'PLACE'].includes(type) ? [action.destination] : [action.source, action.destination];
+  const nodeIds = relevant.filter((id): id is string => typeof id === 'string' && !!id);
+  const predictions = (Array.isArray(body.predictions) ? body.predictions.filter(isRecord) : [])
+    .filter((p) => nodeIds.includes(p.node_id) && ['cpu', 'memory'].includes(p.metric) &&
+      typeof p.origin_timestamp === 'string' && /(?:Z|[+-]\d\d:\d\d)$/i.test(p.origin_timestamp) && Number.isFinite(Date.parse(p.origin_timestamp)) &&
+      typeof p.model_id === 'string' && !!p.model_id && Number.isInteger(p.horizon_seconds) && p.horizon_seconds > 0 && p.horizon_seconds <= 3600 &&
+      typeof p.value === 'number' && Number.isFinite(p.value) && p.value >= 0 && p.value <= 1)
+    .sort((a, b) => a.horizon_seconds - b.horizon_seconds);
+  if (!predictions.length) return undefined;
+  const horizon = predictions[0].horizon_seconds;
+  const seen = new Set<string>();
+  const selected = predictions.filter((p) => {
+    const key = `${p.node_id}:${p.metric}`;
+    if (p.horizon_seconds !== horizon || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   return {
-    [metric]: candidate.value,
-    prediction_confidence: candidate.confidence ?? 0,
-    horizon_seconds: candidate.horizon_seconds,
-    model_id: candidate.model_id,
+    horizon,
+    predicted: {
+      forecasts: selected.map((p) => ({ node_id: p.node_id, metric: p.metric, timestamp: p.origin_timestamp,
+        source: p.model_id, horizon_seconds: p.horizon_seconds, value: p.value })),
+      prediction_confidence: Math.min(...selected.map((p) =>
+        typeof p.confidence === 'number' && Number.isFinite(p.confidence) && p.confidence >= 0 && p.confidence <= 1 ? p.confidence : 0)),
+    },
   };
 }
 
