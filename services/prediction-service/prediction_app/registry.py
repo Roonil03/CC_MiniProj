@@ -72,7 +72,7 @@ class Registry:
             raise RuntimeError("CUDA GPU required for prediction but unavailable")
         device = torch.device("cuda" if require_cuda else "cpu")
         network = neural_network(record["kind"], config["history_steps"],
-                                 len(config["horizons_seconds"])).to(device)
+                                 len(config["horizons_seconds"]), config.get("hidden", 16)).to(device)
         network.load_state_dict(torch.load(artifact, map_location="cpu", weights_only=True))
         scale = Scale(**record["scale"])
         return network, scale

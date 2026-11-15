@@ -17,6 +17,7 @@ class Window:
     origin: datetime
     history: tuple[float, ...]
     targets: tuple[float, ...]
+    target_end: datetime | None = None
 
 
 def bucketed(samples: list[NodeSample], period_seconds: int) -> dict[str, dict[int, NodeSample]]:
@@ -45,9 +46,10 @@ def build_windows(samples: list[NodeSample], metric: str, *, history_steps: int 
             if not all(k in rows for k in past + future):
                 continue
             out.append(Window(node_id, metric,
-                              datetime.fromtimestamp(origin * period_seconds, timezone.utc),
+                              rows[origin].timestamp,
                               tuple(getattr(rows[k], metric) for k in past),
-                              tuple(getattr(rows[k], metric) for k in future)))
+                              tuple(getattr(rows[k], metric) for k in future),
+                              max(rows[k].timestamp for k in future)))
     return sorted(out, key=lambda w: (w.origin, w.node_id))
 
 
@@ -63,7 +65,7 @@ def split_windows(windows: list[Window], *, horizons_seconds: tuple[int, ...],
     from datetime import timedelta
     max_horizon = timedelta(seconds=max(horizons_seconds))
     for window in windows:
-        end = window.origin + max_horizon
+        end = window.target_end or window.origin + max_horizon
         if window.origin < first and end < first:
             result["train"].append(window)
         elif first <= window.origin < second and end < second:

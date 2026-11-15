@@ -15,7 +15,8 @@ def persistence(history: tuple[float, ...], horizons: tuple[int, ...]) -> list[f
 
 
 def statistical(kind: str, history: tuple[float, ...], horizons: tuple[int, ...],
-                period_seconds: int = 1) -> list[float]:
+                period_seconds: int = 1, *, order: tuple[int, int, int] = (1, 0, 0),
+                trend: str | None = None) -> list[float]:
     """Refit on past values only; expensive by design and intended offline."""
     if len(history) < 12:
         raise ValueError("statistical baseline needs at least 12 observations")
@@ -24,10 +25,10 @@ def statistical(kind: str, history: tuple[float, ...], horizons: tuple[int, ...]
         raise ValueError("horizons must align with sampling period")
     if kind == "arima":
         from statsmodels.tsa.arima.model import ARIMA
-        fitted = ARIMA(history, order=(1, 0, 0), trend="c").fit()
+        fitted = ARIMA(history, order=order, trend="c").fit()
     elif kind == "ets":
         from statsmodels.tsa.holtwinters import ExponentialSmoothing
-        fitted = ExponentialSmoothing(history, trend=None, seasonal=None).fit(optimized=True)
+        fitted = ExponentialSmoothing(history, trend=trend, seasonal=None).fit(optimized=True)
     else:
         raise ValueError("unknown statistical model")
     forecast = fitted.forecast(max(steps))
