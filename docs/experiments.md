@@ -41,24 +41,24 @@ container (currently Python 3.11). It builds/starts the Compose prediction servi
 `docker-compose.gpu.yml`, then verifies CUDA in the prediction container. It
 installs the optional pinned PPO dependencies in the prediction container.
 CUDA-enabled PyTorch is installed in the image during its build. Docker Desktop and GPU drivers are
-prerequisites; the script does not install those host components. It does not
-fetch datasets or contact a cluster, cloud, or production service. Docker
-image and pinned package pulls are required on first setup.
-Without `-TelemetryExport` or `-UseBitbrains` it prepares deterministic **synthetic** local
-fixtures for stable, burst, or memory-pressure forecasting. A supplied export
-must be a local `NODE_METRIC_UPDATED` JSONL file. Its raw contents stay outside
-the archive; the input manifest records its path and SHA-256 identity.
+prerequisites; the script does not install those host components. Docker image
+and pinned package pulls are required on first setup. The default input is
+Bitbrains fastStorage: the runner downloads it when it is not cached. Supply
+`-TelemetryExport` for local `NODE_METRIC_UPDATED` JSONL, or explicitly pass
+`-UseBitbrains:$false` without an export to generate synthetic fixtures. The
+input manifest records source identity; prepared SQLite inputs can be included
+in the output ZIP, so inspect the archive before sharing.
 
 From the repository root, inspect the plan with:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_dt_models.ps1 -WhatIf -RunId trial-01 -Models persistence -Scenarios stable -Seeds 42
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_dt_models.ps1 -WhatIf -UseBitbrains:$false -RunId example-synthetic -Models persistence -Scenarios stable -Seeds 42
 ```
 
 For an actual local GPU run:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_dt_models.ps1 -RunId trial-01 -Scenarios stable,burst -Seeds 42,43 -CheckpointPackage
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_dt_models.ps1 -UseBitbrains:$false -RunId example-synthetic -Scenarios stable,burst -Seeds 42,43 -CheckpointPackage
 ```
 
 Add `-Policies ppo` only when optional simulation training is desired. The
@@ -77,8 +77,7 @@ Resume with the same arguments and run ID; the runner skips completed jobs and
 retries interrupted or failed jobs. `-Fresh` requires a new run ID to preserve
 prior outputs. The final `experiments/runs/windows-models/<RunId>.zip` contains
 the run manifest, configs, logs, JSON, plots and resumable artifacts. The
-`_inputs` directory holds local SQLite fixtures and is excluded from the ZIP
-and Git. Synthetic results show software behavior only. With `-UseBitbrains`, see the [real-trace guide](real-trace-run.md) and the [partial bitbrains-01 report](analysis/bitbrains-01-partial-2026-11-15.md).
+`_inputs` holds local cached inputs and is excluded from Git. Run archives can include prepared SQLite inputs and model weights. Synthetic results show software behavior only. With `-UseBitbrains`, see the [real-trace guide](real-trace-run.md) and the [partial bitbrains-01 report](analysis/bitbrains-01-partial-2026-11-15.md).
 
 ### Recorded synthetic example: trial-01
 
