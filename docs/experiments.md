@@ -64,8 +64,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_dt_models.
 Add `-Policies ppo` only when optional simulation training is desired. The
 statistical baselines (ARIMA/ETS) use CPU because their existing statsmodels
 implementation has no CUDA path. Neural forecasting and PPO require CUDA in
-this runner; they fail rather than silently falling back to CPU. The local
-Compose stack is started for the user's requested environment, while the
+this runner; they fail rather than silently falling back to CPU. The prediction
+service and its NATS dependency are started, while the
 offline sweep uses only local SQLite data and never consumes live broker
 messages. The
 script starts with a bounded persistence calibration and records an estimate
@@ -77,7 +77,7 @@ Resume with the same arguments and run ID; the runner skips completed jobs and
 retries interrupted or failed jobs. `-Fresh` requires a new run ID to preserve
 prior outputs. The final `experiments/runs/windows-models/<RunId>.zip` contains
 the run manifest, configs, logs, JSON, plots and resumable artifacts. The
-`_inputs` holds local cached inputs and is excluded from Git. Run archives can include prepared SQLite inputs and model weights. Synthetic results show software behavior only. With `-UseBitbrains`, see the [real-trace guide](real-trace-run.md) and the [partial bitbrains-01 report](analysis/bitbrains-01-partial-2026-11-15.md).
+prepared input is stored at `<RunId>/<scenario-seed>/input.sqlite` inside the run directory and included in the ZIP. Run data and model weights remain Git-ignored. Synthetic results show software behavior only. With `-UseBitbrains`, see the [real-trace guide](real-trace-run.md) and the [partial bitbrains-01 report](analysis/bitbrains-01-partial-2026-11-15.md).
 
 ### Recorded synthetic example: trial-01
 
