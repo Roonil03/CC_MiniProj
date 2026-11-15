@@ -10,6 +10,10 @@ from prediction_app.scripts.run_all_models import (
     EventRecorder,
     format_duration,
     new_state,
+    parse_args,
+    make_config,
+    load_or_create_state,
+    estimate_job_seconds,
     package_run,
     run_job,
     write_estimate,
@@ -26,11 +30,37 @@ class RunnerTests(unittest.TestCase):
             recorder = EventRecorder(run_dir, logging.getLogger("runner-resume-test"))
             args = Namespace(max_attempts=1, retry_delay_seconds=0, fail_fast=False,
                              db="unused", history_steps=8, horizons=[1], period_seconds=1,
-                             seed=42, epochs=1, source_label="fixture")
+                             seed=42, epochs=1, source_label="fixture", tune=False)
             with patch("prediction_app.scripts.run_all_models.run_training", return_value={"model_id": "fixture", "metrics": {}}):
                 run_job(args, run_dir, state, recorder, logging.getLogger("runner-resume-test"), "persistence__cpu")
             self.assertEqual(state["jobs"]["persistence__cpu"]["attempts"], 3)
             self.assertEqual(state["jobs"]["persistence__cpu"]["status"], "completed")
+
+    def test_tune_propagates_and_changes_resume_identity(self):
+        args = parse_args(["--models", "gru", "--tune", "--source-label", "fixture"])
+        self.assertTrue(args.tune)
+        config = make_config(args)
+        self.assertTrue(config["tune"])
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir = Path(temp)
+            logger = logging.getLogger("runner-tune-test")
+            state = load_or_create_state(run_dir, config, False, logger)
+            estimate = write_estimate(run_dir, state)
+            self.assertEqual(estimate["jobs"][0]["candidate_count"], 2)
+            self.assertEqual(estimate_job_seconds("gru", 20, [], True)[0],
+                             2 * estimate_job_seconds("gru", 20, [], False)[0])
+            self.assertEqual(estimate_job_seconds("persistence", 20, [], True)[0],
+                             estimate_job_seconds("persistence", 20, [], False)[0])
+            base = dict(config, tune=False)
+            with self.assertRaisesRegex(ValueError, "configuration differs"):
+                load_or_create_state(run_dir, base, False, logger)
+            args.max_attempts = 1
+            recorder = EventRecorder(run_dir, logger)
+            with patch("prediction_app.scripts.run_all_models.run_training",
+                       return_value={"model_id": "fixture", "metrics": {}}) as train:
+                run_job(args, run_dir, state, recorder, logger, "gru__cpu")
+            self.assertTrue(train.call_args.kwargs["tune"])
+            self.assertEqual(state["jobs"]["gru__cpu"]["status"], "completed")
 
     def test_state_estimate_and_package_are_restart_safe(self):
         config = {
