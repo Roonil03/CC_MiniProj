@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 ARG TORCH_CUDA_INDEX=
 RUN if [ -n "$TORCH_CUDA_INDEX" ]; then pip install --no-cache-dir --force-reinstall torch==2.6.0 --index-url "$TORCH_CUDA_INDEX"; fi
 COPY prediction_app ./prediction_app
-RUN mkdir -p /data /models && chown -R 10001:10001 /data /models
+RUN mkdir -p /data /models && chown -R 10001:10001 /data /models /opt/venv
 USER 10001:10001
 EXPOSE 5000
 CMD ["python", "-m", "uvicorn", "prediction_app.service:app", "--host", "0.0.0.0", "--port", "5000"]
