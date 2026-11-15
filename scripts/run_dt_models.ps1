@@ -107,7 +107,7 @@ function To-ContainerPath([string]$path) {
 function Invoke-Local([string]$label, [string]$exe, [string[]]$arguments, [string]$workingDirectory = $repo) {
     if ($exe -eq "container-python") {
         $mapped = @($arguments | ForEach-Object {
-            if ($_ -match '^[A-Za-z]:[\\/]') { To-ContainerPath $_ } else { $_ }
+            if ([IO.Path]::IsPathRooted($_)) { To-ContainerPath $_ } else { $_ }
         })
         $exe = "docker"
         $arguments = $composeArgs + @("exec", "-T", "-w", "/workspace/services/prediction-service",
@@ -133,6 +133,9 @@ function Invoke-Local([string]$label, [string]$exe, [string[]]$arguments, [strin
     return $code
 }
 
+$jobs = @()
+$failed = @()
+$failurePath = Join-Path $run "failure.json"
 try {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw "Docker CLI is required; install Docker Desktop with Linux containers and GPU support first" }
     if (-not (Test-Path -LiteralPath (Join-Path $repo ".env"))) { throw "Local .env is required for Compose; copy .env.example and set unique credentials" }
@@ -142,6 +145,7 @@ try {
     if ((Invoke-Local "docker-start" "docker" ($composeArgs + @("up", "-d", "--build", "--pull", "missing"))) -ne 0) { throw "Could not pull missing images, build images, and start local Docker services" }
     if ((Invoke-Local "docker-gpu-check" "docker" ($composeArgs + @("exec", "-T", "prediction-service", "python", "-c", "import torch; assert torch.cuda.is_available(), 'CUDA GPU unavailable in prediction container'; print(torch.cuda.get_device_name(0))"))) -ne 0) { throw "Prediction container cannot access CUDA GPU" }
     if ((Invoke-Local "container-python-check" $python @("-c", "import torch; assert torch.cuda.is_available(), 'CUDA GPU unavailable'; print('Python GPU runtime:', __import__('sys').version, torch.__version__, torch.cuda.get_device_name(0))")) -ne 0) { throw "GPU-enabled container Python is unavailable" }
+    if ((Invoke-Local "install-model-deps" $python @("-m", "pip", "install", "--requirement", "/workspace/scripts/requirements-dt-models.txt")) -ne 0) { throw "Pinned model dependency install failed" }
     if ($Policies.Count -gt 0) {
         if ((Invoke-Local "install-ppo-deps" $python @("-m", "pip", "install", "--requirement", "/workspace/scripts/requirements-dt-ppo.txt")) -ne 0) { throw "Pinned PPO dependency install failed" }
     }
@@ -171,10 +175,6 @@ try {
         }
         if ($previous.input.sha256 -ne $identity.sha256 -or $previous.input.source -ne $identity.source) { throw "Run input changed; use a new RunId" }
     } else { SaveJson $configPath $config }
-    $failurePath = Join-Path $run "failure.json"
-    if (Test-Path -LiteralPath $failurePath) { Remove-Item -LiteralPath $failurePath }
-    $jobs = @()
-    $failed = @()
     foreach ($scenario in $Scenarios) {
         foreach ($seed in $Seeds) {
             $name = "$scenario-seed$seed"
@@ -184,7 +184,14 @@ try {
             $dbParent = Split-Path -Parent $db
             New-Item -ItemType Directory -Path $dbParent -Force | Out-Null
             $dbManifest = if ($UseBitbrains) { "$db.manifest.json" } else { [IO.Path]::ChangeExtension($db, ".manifest.json") }
-            if ((Test-Path -LiteralPath $db) -and -not (Test-Path -LiteralPath $dbManifest)) { Log "Discarding incomplete input database for $name"; Remove-Item -LiteralPath $db -Force }
+            $hasDb = Test-Path -LiteralPath $db
+            $hasManifest = Test-Path -LiteralPath $dbManifest
+            if ($hasDb -xor $hasManifest) {
+                Log "Discarding incomplete input artifacts for $name"
+                foreach ($partialPath in @($db, $dbManifest, "$db-wal", "$db-shm")) {
+                    if (Test-Path -LiteralPath $partialPath) { Remove-Item -LiteralPath $partialPath -Force }
+                }
+            }
             if (-not (Test-Path -LiteralPath $db) -and $UseBitbrains) {
                 if ((Invoke-Local "import-$name" $python @("-m", "prediction_app.bitbrains", "--archive", $BitbrainsArchive, "--db", $db, "--max-vms", "5")) -ne 0) { throw "Bitbrains import failed for $name" }
             }
@@ -195,7 +202,8 @@ try {
             }
             Copy-Item -LiteralPath $dbManifest -Destination (Join-Path $jobDir "input-manifest.json") -Force
             $dataManifest = Get-Content -LiteralPath (Join-Path $jobDir "input-manifest.json") -Raw | ConvertFrom-Json
-            if ($UseBitbrains -and $dataManifest.archive_sha256 -ne $identity.sha256) { throw "Bitbrains archive changed since import; use a new RunId" }
+            if ($UseBitbrains -and ($dataManifest.archive_sha256 -ne $identity.sha256 -or $dataManifest.cadence_seconds -ne 300 -or $dataManifest.source_url -ne "https://atlarge-research.com/gwa-traces/gwa_t_12_fastStorage.zip")) { throw "Bitbrains input provenance does not match the requested source and cadence; use a new RunId" }
+            if ((Invoke-Local "check-input-$name" $python @("-c", "import sqlite3,sys; c=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True); assert c.execute('PRAGMA quick_check').fetchone()[0]=='ok', 'SQLite integrity check failed'", $db)) -ne 0) { throw "Input database integrity check failed for $name" }
             if ($input -and $dataManifest.input_sha256 -ne $identity.sha256) { throw "Input changed since $name was prepared; use a new RunId" }
             $calibrationDir = Join-Path $run "calibration"
             if (-not (Test-Path (Join-Path $calibrationDir "summary.json"))) {
@@ -229,6 +237,8 @@ try {
                     $policyCode = Invoke-Local "ppo-$name" $python $ppo
                     $jobs += @{ name = $name; type = "ppo"; exit_code = $policyCode; output = "$name/ppo.json" }
                     if ($policyCode -ne 0) { $failed += "ppo-$name" }
+                } else {
+                    $jobs += @{ name = $name; type = "ppo"; exit_code = 0; output = "$name/ppo.json"; resumed = $true }
                 }
             }
             SaveJson (Join-Path $run "state.json") @{ schema_version = 1; updated_at = (Stamp); jobs = $jobs; failed = $failed }
@@ -244,7 +254,11 @@ try {
     if ((Invoke-Local "comparison-plots" $python @((Join-Path $repo "scripts/plot_run_comparisons.py"), "--run-dir", $run)) -ne 0) {
         $failed += "comparison-plots"
     }
-    $manifest = @{ schema_version = 1; created_at = (Stamp); run_id = $RunId; synthetic = (-not [bool]$input -and -not $UseBitbrains); jobs = $jobs;
+    $status = if ($failed.Count -gt 0) { "incomplete" } else { "completed" }
+    if ($failed.Count -gt 0) { SaveJson $failurePath @{ timestamp = (Stamp); failed = $failed } }
+    elseif (Test-Path -LiteralPath $failurePath) { Remove-Item -LiteralPath $failurePath }
+    SaveJson (Join-Path $run "state.json") @{ schema_version = 1; updated_at = (Stamp); status = $status; jobs = $jobs; failed = $failed }
+    $manifest = @{ schema_version = 1; status = $status; created_at = (Stamp); run_id = $RunId; synthetic = (-not [bool]$input -and -not $UseBitbrains); jobs = $jobs;
                    failed = $failed; input = $identity; archive = "$run.zip"; note = "Offline forecasting and simulation; no live cluster evidence" }
     SaveJson (Join-Path $run "manifest.json") $manifest
     Log "ARCHIVE $run.zip manifest=$(Join-Path $run 'manifest.json')"
@@ -252,7 +266,10 @@ try {
     if ($failed.Count -gt 0) { exit 2 }
 } catch {
     Log "FAILURE $($_.Exception.Message)"
-    SaveJson (Join-Path $run "failure.json") @{ timestamp = (Stamp); error = $_.Exception.Message }
+    $errorMessage = $_.Exception.Message
+    SaveJson $failurePath @{ timestamp = (Stamp); error = $errorMessage }
+    SaveJson (Join-Path $run "state.json") @{ schema_version = 1; updated_at = (Stamp); status = "failed"; jobs = $jobs; failed = @("runner"); error = $errorMessage }
+    SaveJson (Join-Path $run "manifest.json") @{ schema_version = 1; created_at = (Stamp); run_id = $RunId; status = "failed"; jobs = $jobs; failed = @("runner"); error = $errorMessage; archive = "$run.zip" }
     Compress-Archive -Path (Join-Path $run "*") -DestinationPath "$run.zip" -Force
     throw
 }
