@@ -15,7 +15,6 @@ import logging
 import os
 import platform
 import shutil
-import subprocess
 import sys
 import time
 import traceback
@@ -30,7 +29,7 @@ except ImportError:  # pragma: no cover - documented as an optional fallback
     psutil = None
 
 from ..data import METRICS, SampleStore
-from ..training import KINDS, run_training
+from ..training import KINDS, _git_info, run_training
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 SERVICE_ROOT = REPO_ROOT / "services" / "prediction-service"
@@ -55,16 +54,7 @@ def write_json(path: Path, value: Any) -> None:
 
 
 def git_commit() -> str:
-    try:
-        return subprocess.check_output(
-            ["git", "-c", f"safe.directory={REPO_ROOT}", "rev-parse", "HEAD"],
-            cwd=REPO_ROOT,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=10,
-        ).strip()
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return "unavailable"
+    return str(_git_info()["git_commit"])
 
 
 def system_snapshot() -> dict[str, Any]:

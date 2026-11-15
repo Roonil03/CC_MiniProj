@@ -140,7 +140,9 @@ function Invoke-Local([string]$label, [string]$exe, [string[]]$arguments, [strin
             if ($_ -eq "/workspace" -or $_.StartsWith("/workspace/", [StringComparison]::Ordinal)) { $_ } elseif ([IO.Path]::IsPathRooted($_)) { To-ContainerPath $_ } else { $_ }
         })
         $exe = "docker"
-        $arguments = $composeArgs + @("exec", "-T", "-w", "/workspace/services/prediction-service",
+        $arguments = $composeArgs + @("exec", "-T", "-e", "DT_RAM_SOURCE_GIT_COMMIT=$gitSha",
+                                      "-e", "DT_RAM_SOURCE_GIT_DIRTY=$gitDirty",
+                                      "-w", "/workspace/services/prediction-service",
                                       "prediction-service", "python") + $mapped
     }
     $script:lastNativeOutput = New-Object 'System.Collections.Generic.Queue[string]'
@@ -175,6 +177,11 @@ $failurePath = Join-Path $run "failure.json"
 try {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw "Docker CLI is required; install Docker Desktop with Linux containers and GPU support first" }
     if (-not (Test-Path -LiteralPath (Join-Path $repo ".env"))) { throw "Local .env is required for Compose; copy .env.example and set unique credentials" }
+    $gitSha = (& git -C $repo rev-parse HEAD | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $gitSha -notmatch '^(?:[0-9a-f]{40}|[0-9a-f]{64})$') { throw "Could not record repository Git commit" }
+    $gitStatus = (& git -C $repo status --porcelain | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Could not record repository working-tree status" }
+    $gitDirty = if ($gitStatus) { "1" } else { "0" }
     $composeArgs = @("compose", "--progress", "plain", "--env-file", (Join-Path $repo ".env"),
                      "-f", $compose, "-f", $composeGpu)
     if ((Invoke-Local "docker-preflight" "docker" ($composeArgs + @("config", "--quiet"))) -ne 0) { throw "GPU Compose configuration is invalid" }
@@ -198,9 +205,8 @@ try {
         }
     }
     $version = "GPU-enabled prediction-service container Python (version recorded by container-python-check)"
-    $gitSha = (& git -C $repo rev-parse HEAD | Out-String).Trim()
     $identity = if ($UseBitbrains) { @{ source = "bitbrains-fastStorage"; sha256 = (Get-FileHash -LiteralPath $BitbrainsArchive -Algorithm SHA256).Hash } } elseif ($input) { @{ path = $input; sha256 = (Get-FileHash -LiteralPath $input -Algorithm SHA256).Hash; included_in_archive = $false } } else { @{ source = "synthetic" } }
-    $config = @{ schema_version = 1; created_at = (Stamp); git_commit = $gitSha; python = $version; ps_version = $PSVersionTable.PSVersion.ToString();
+    $config = @{ schema_version = 1; created_at = (Stamp); git_commit = $gitSha; working_tree_dirty = ($gitDirty -eq "1"); python = $version; ps_version = $PSVersionTable.PSVersion.ToString();
                  machine = [Environment]::MachineName; os = [Environment]::OSVersion.VersionString; models = $Models; metrics = $Metrics;
                  scenarios = $Scenarios; seeds = $Seeds; policies = $Policies; training_steps = $TrainingSteps; epochs = $Epochs; period_seconds = $PeriodSeconds; history_steps = $HistorySteps; horizons = $Horizons; tune = [bool]$Tune; input = $identity }
     $configPath = Join-Path $run "config.json"
